@@ -1,6 +1,6 @@
 # CloudSim Assignment
 
-This is a repository that stores the Java files for a given CloudSim assignment. The assignment is provided by CLOUDs LABS, the University of Melbourne.
+This repository stores the Java files for a given CloudSim assignment. CLOUDs LABS, the University of Melbourne provide the assignment.
 
 ### Steps to follow
 
@@ -10,3 +10,6 @@ This is a repository that stores the Java files for a given CloudSim assignment.
 2. Explore the folder structure and create a new package named `project` at `cloudsim/modules/cloudsim-examples/src/main/java/org/cloudbus/cloudsim`
 3. Copy and Paste the files in this repo inside the created package.
 4. Run the java files with the main method. Java files are divided as question numbers (QuestionOne.java, QuestionTwo.java, etc)
+5. The sample project structure can be found :
+
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/project-structure.png" alt="Sample project structure" style="width:400px;"/>
