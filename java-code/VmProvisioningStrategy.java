@@ -1,6 +1,7 @@
 package org.cloudbus.cloudsim.project;
 
-import org.cloudbus.cloudsim.*;
+import org.cloudbus.cloudsim.CloudletSchedulerTimeShared;
+import org.cloudbus.cloudsim.Vm;
 
 import java.util.*;
 
@@ -44,24 +45,12 @@ public class VmProvisioningStrategy {
         INSTANCE_TYPES.put("t4g.small", new InstanceType(2, 2048, 100000, 0.0212, false));
     }
 
-    private static class InstanceType {
-        int vCpus;
-        int ram;
-        int storage;
-        double hourlyCost;
-        boolean suitableVm;
+    public static Map<String, Map<Integer, Vm>> getRunningVms() {
+        return runningVms;
+    }
 
-        public InstanceType(int vCpus, int ram, int storage, double hourlyCost, boolean suitableVm) {
-            this.vCpus = vCpus;
-            this.ram = ram;
-            this.storage = storage;
-            this.hourlyCost = hourlyCost;
-            this.suitableVm = suitableVm;
-        }
-
-        public void setSuitableVm(boolean suitableVm) {
-            this.suitableVm = suitableVm;
-        }
+    public static Map<String, Integer> getNumberOfEachInstance() {
+        return numberOfEachInstance;
     }
 
     // Finding best instance
@@ -71,9 +60,9 @@ public class VmProvisioningStrategy {
 
         for (Map.Entry<String, InstanceType> entry : INSTANCE_TYPES.entrySet()) {
             InstanceType instance = entry.getValue();
-            double estimatedCompletionTime = cloudlet.getSubmissionTime() + (double) cloudlet.getCloudletLength() / (cloudlet.getNumberOfPes() * MIPS_PER_VCPU);
+            double estimatedCompletionTime = cloudlet.getCloudletSubmissionTime() + (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
             if (instance.vCpus >= cloudlet.getNumberOfPes() && instance.ram >= cloudlet.getMinMemoryToExecute() && instance.storage >= cloudlet.getMinStorageToExecute()) {
-                if (instance.hourlyCost < minCostHourly  && estimatedCompletionTime < cloudlet.getDeadline()) {
+                if (instance.hourlyCost < minCostHourly && estimatedCompletionTime < cloudlet.getDeadline()) {
                     minCostHourly = instance.hourlyCost;
                     bestInstance = instance;
                     cloudlet.setBestInstance(entry.getKey());
@@ -106,43 +95,48 @@ public class VmProvisioningStrategy {
                     if (coresAvailable > 0 && coresAvailable >= cloudlet.getNumberOfPes()) {
                         vmToCloudlets.computeIfAbsent(vm.getId(), k -> new HashMap<>()).put(coresOccupied.get(vm.getId()), cloudlet); // assign next available core for cloudlet
                         cloudlet.setGuestId(vm.getId()); // set the cloudlet guest ID.
-                        updateDetailsForVm(1, cloudlet, vm.getId(), 0);
+                        updateDetailsForVm(1, cloudlet, vm.getId(), 0, bestInstance);
                         cloudletDone = true;
                         break;
                     } else {
+                        List<Integer> checkings = new ArrayList<>();
+                        int coreFlag = 0;
                         for (int i = 0; i < vm.getNumberOfPes(); i++) {
                             // check whether the task can be executed on given VM which has higher or equal amount of PEs utilized by current cloudlet
                             boolean isEnoughCoresAvailable = vmToCloudlets.get(vm.getId()).get(i).getNumberOfPes() >= cloudlet.getNumberOfPes();
                             if (!isEnoughCoresAvailable) {
                                 continue;
                             }
-                            int check = checkSuitability(cloudlet, vm, i);
+                            int check = checkSuitability(cloudlet, vm, i, bestInstance);
                             if (check == 1) {
-                                int currentCore = 0;
-                                for (Map.Entry<Integer, CloudletDetails> cloudletEntry : vmToCloudlets.get(vm.getId()).entrySet()) {
-                                    if (cloudletEntry.getValue().getCloudletId() == vmToCloudlets.get(vm.getId()).get(i).getCloudletId())
-                                        currentCore = cloudletEntry.getKey();
-                                }
-                                vmToCloudlets.computeIfAbsent(vm.getId(), k -> new HashMap<>()).put(currentCore, cloudlet);
-                                cloudlet.setGuestId(vm.getId()); // set the cloudlet guest ID.
-                                updateDetailsForVm(2, cloudlet, vm.getId(), currentCore);
-                                cloudletDone = true;
-                                break;
-                            } else if (check == 2) {
-                                // Create another VM for same instance
-                                numberOfEachInstance.put(instanceName, numberOfEachInstance.get(instanceName) + 1);
-                                Vm newVm = createVm(userId, instanceName, bestInstance);
-                                vmList.add(newVm);
-                                runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(newVm.getId(), newVm);
-                                updateDetailsForVm(0, cloudlet, newVm.getId(), 0); // update the usage of given VM
-                                vmToCloudlets.computeIfAbsent(newVm.getId(), k -> new HashMap<>()).put(0, cloudlet);
-                                cloudlet.setGuestId(newVm.getId()); // set the cloudlet guest ID.
-                                cloudletDone = true;
-                                break;
+                                coreFlag = i;
                             }
+                            checkings.add(check);
                         }
+
+                        // create a new VM or use existing one according to the check doing under for loop
+                        if (checkings.contains(1)) {
+                            int currentCore = 0;
+                            for (Map.Entry<Integer, CloudletDetails> cloudletEntry : vmToCloudlets.get(vm.getId()).entrySet()) {
+                                if (cloudletEntry.getValue().getCloudletId() == vmToCloudlets.get(vm.getId()).get(coreFlag).getCloudletId())
+                                    currentCore = cloudletEntry.getKey();
+                            }
+                            vmToCloudlets.computeIfAbsent(vm.getId(), k -> new HashMap<>()).put(currentCore, cloudlet);
+                            cloudlet.setGuestId(vm.getId()); // set the cloudlet guest ID.
+                            updateDetailsForVm(2, cloudlet, vm.getId(), currentCore, bestInstance);
+                        } else {
+                            // Create another VM for same instance
+                            numberOfEachInstance.put(instanceName, numberOfEachInstance.get(instanceName) + 1);
+                            Vm newVm = createVm(userId, instanceName, bestInstance);
+                            vmList.add(newVm);
+                            runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(newVm.getId(), newVm);
+                            updateDetailsForVm(0, cloudlet, newVm.getId(), 0, bestInstance); // update the usage of given VM
+                            vmToCloudlets.computeIfAbsent(newVm.getId(), k -> new HashMap<>()).put(0, cloudlet);
+                            cloudlet.setGuestId(newVm.getId()); // set the cloudlet guest ID.
+                        }
+                        cloudletDone = true;
+                        break;
                     }
-                    break;
                 }
                 if (!cloudletDone) {
                     // Create another VM for same instance
@@ -150,7 +144,7 @@ public class VmProvisioningStrategy {
                     Vm newVm = createVm(userId, instanceName, bestInstance);
                     vmList.add(newVm);
                     runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(newVm.getId(), newVm);
-                    updateDetailsForVm(0, cloudlet, newVm.getId(), 0); // update the usage of given VM
+                    updateDetailsForVm(0, cloudlet, newVm.getId(), 0, bestInstance); // update the usage of given VM
                     vmToCloudlets.computeIfAbsent(newVm.getId(), k -> new HashMap<>()).put(0, cloudlet);
                     cloudlet.setGuestId(newVm.getId()); // set the cloudlet guest ID.
                 }
@@ -159,7 +153,7 @@ public class VmProvisioningStrategy {
                 Vm vm = createVm(userId, instanceName, bestInstance);
                 vmList.add(vm);
                 runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(vm.getId(), vm);
-                updateDetailsForVm(0, cloudlet, vm.getId(), 0); // update the usage of given VM
+                updateDetailsForVm(0, cloudlet, vm.getId(), 0, bestInstance); // update the usage of given VM
                 vmToCloudlets.computeIfAbsent(vm.getId(), k -> new HashMap<>()).put(0, cloudlet);
                 cloudlet.setGuestId(vm.getId()); // set the cloudlet guest ID.
             }
@@ -167,8 +161,8 @@ public class VmProvisioningStrategy {
         return vmList;
     }
 
-    private static void updateDetailsForVm(int flag, CloudletDetails cloudlet, int vmId, int coreToBe) {
-        double estimatedCompletionTime = cloudlet.getSubmissionTime() + (double) cloudlet.getCloudletLength() / cloudlet.getNumberOfPes()*MIPS_PER_VCPU;
+    private static void updateDetailsForVm(int flag, CloudletDetails cloudlet, int vmId, int coreToBe, InstanceType instance) {
+        double estimatedCompletionTime = cloudlet.getCloudletSubmissionTime() + (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
         if (flag == 0) { // New Vm creation with all free cores
             coresOccupied.put(vmId, cloudlet.getNumberOfPes());
             vmStartTimes.computeIfAbsent(vmId, k -> new HashMap<>()).put(0, cloudlet.getCloudletSubmissionTime());
@@ -184,12 +178,11 @@ public class VmProvisioningStrategy {
         }
     }
 
-    private static int checkSuitability(CloudletDetails cloudlet, Vm vm, int core) {
+    private static int checkSuitability(CloudletDetails cloudlet, Vm vm, int core, InstanceType instance) {
         int result;
-        double completionTime = (double) cloudlet.getCloudletLength() / cloudlet.getNumberOfPes()*MIPS_PER_VCPU;
+        double completionTime = (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
         double startTime = cloudlet.getCloudletSubmissionTime();
-        if (vmFinishTimes.containsKey(vm.getId()) && vmFinishTimes.get(vm.getId()).containsKey(core) &&
-                vmToCloudlets.containsKey(vm.getId()) && vmToCloudlets.get(vm.getId()).containsKey(core)) {
+        if (vmFinishTimes.containsKey(vm.getId()) && vmFinishTimes.get(vm.getId()).containsKey(core) && vmToCloudlets.containsKey(vm.getId()) && vmToCloudlets.get(vm.getId()).containsKey(core)) {
             double finishTimeOfPrevCloudlet = vmFinishTimes.get(vm.getId()).get(core);
             if (startTime > finishTimeOfPrevCloudlet) {
                 if (cloudlet.getDeadline() > startTime + completionTime) {
@@ -215,14 +208,15 @@ public class VmProvisioningStrategy {
         return null;
     }
 
-    private static int createDynamicVmID (int userId, String instanceName, int numberOfInstance) {
+    private static int createDynamicVmID(int userId, String instanceName, int numberOfInstance) {
         int vmId = userId + INSTANCE_TYPES.keySet().stream().toList().indexOf(instanceName);
-        return Integer.parseInt(String.valueOf(vmId) + String.valueOf(0) + String.valueOf(0) + String.valueOf(numberOfInstance));
+        return Integer.parseInt(String.valueOf(vmId) + 0 + 0 + numberOfInstance);
     }
 
     private static Vm createVm(int userId, String instanceName, InstanceType instance) {
         int mips = (int) (instance.vCpus * MIPS_PER_VCPU);
-        return new Vm(createDynamicVmID(userId, instanceName, numberOfEachInstance.getOrDefault(instanceName, 0)),
+        return new Vm(
+                createDynamicVmID(userId, instanceName, numberOfEachInstance.getOrDefault(instanceName, 0)),
                 userId,
                 mips,
                 instance.vCpus,
@@ -230,7 +224,27 @@ public class VmProvisioningStrategy {
                 10000,
                 instance.storage,
                 "Xen",
-                new CloudletSchedulerSpaceShared());
+                new CloudletSchedulerTimeShared());
+    }
+
+    private static class InstanceType {
+        int vCpus;
+        int ram;
+        int storage;
+        double hourlyCost;
+        boolean suitableVm;
+
+        public InstanceType(int vCpus, int ram, int storage, double hourlyCost, boolean suitableVm) {
+            this.vCpus = vCpus;
+            this.ram = ram;
+            this.storage = storage;
+            this.hourlyCost = hourlyCost;
+            this.suitableVm = suitableVm;
+        }
+
+        public void setSuitableVm(boolean suitableVm) {
+            this.suitableVm = suitableVm;
+        }
     }
 
 }

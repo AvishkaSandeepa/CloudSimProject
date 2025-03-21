@@ -6,6 +6,7 @@ import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
 
+import javax.swing.*;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -138,12 +139,18 @@ public class QuestionTwo {
     }
 
 
+
     /**
      * Prints the Cloudlet objects
      * @param list  list of Cloudlets
      */
     private static void printCloudletList(List<CloudletDetails> list) {
         CloudletDetails cloudlet;
+        Map<String, Double> runningVmNames = new HashMap<>();
+        Map<Integer, Double> vmExecutionTimes = new HashMap<>();
+        Map<String, Double> totalCostPerVm = new HashMap<>();
+
+
 
         String indent = "    ";
         Log.println("\n \n \n");
@@ -152,6 +159,7 @@ public class QuestionTwo {
                 "Data center ID" + indent + "VM ID" + indent + indent +
                 "SubmissionTime" + indent + indent + "Time" + indent + indent +
                 "Start Time" + indent + "Finish Time" + indent + indent +
+//                "Deadline" + indent +
                 "VM Instance" + indent + indent + "Price Per Hour($)" + indent + indent + "Price for consumption ($)");
 
         DecimalFormat dft = new DecimalFormat("###.##");
@@ -164,6 +172,18 @@ public class QuestionTwo {
             Log.print(indent + cloudlet.getCloudletId() + indent + indent);
             totalCost += cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0);
 
+//            if (!runningVmNames.containsKey(cloudlet.getBestInstance())) {
+//                runningVmNames.put(cloudlet.getBestInstance(), 0.0);
+//            }
+
+            int vmId = cloudlet.getGuestId();
+            double executionTime = cloudlet.getExecFinishTime() - cloudlet.getExecStartTime();
+            vmExecutionTimes.merge(vmId, executionTime, Double::sum);
+            String foundInstanceName = findInstanceNameByVmId(vmId);
+            runningVmNames.merge(foundInstanceName, executionTime, Double::sum);
+            totalCostPerVm.merge(foundInstanceName, cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0), Double::sum);
+
+//            if (cloudlet.getDeadline() < cloudlet.getExecFinishTime()) System.err.println("ERRRRRRRR");
             if (cloudlet.getStatus() == CloudletDetails.CloudletStatus.SUCCESS && Objects.nonNull(cloudlet.getBestInstance())) {
                 Log.print("SUCCESS");
                 totalCompleted++;
@@ -174,6 +194,7 @@ public class QuestionTwo {
                         indent + indent + indent + indent + dft.format(cloudlet.getActualCPUTime()) +
                         indent + indent + indent + dft.format(cloudlet.getExecStartTime()) +
                         indent + indent + indent + dft.format(cloudlet.getExecFinishTime()) +
+//                        indent + indent + indent + cloudlet.getDeadline() +
                         indent + indent + indent + cloudlet.getBestInstance() +
                         indent + indent + indent + cloudlet.getHourlyPrice() +
                         indent + indent + indent + indent + indent + dft1.format(cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0)));
@@ -185,13 +206,35 @@ public class QuestionTwo {
         Log.println();
 
         Log.println("Total No of cloudlets completed : " + totalCompleted + " out of " + CustomDatacenterBroker.getTotalCloudletRead());
-//        Log.println("========== VM Times ==========");
-//        Log.println("VM" + indent + indent + indent + "Start" + indent + indent + "End");
-//        for (String vm : vms) {
-//            Log.println(vm+ indent + indent + CloudSimTstTwo.getVmStartTimes().get(vm) +
-//                    indent + indent + CloudSimTstTwo.getVmFinishTimes().get(vm));
+        Log.println("========== VM ==========");
+        Log.println("VM Name" + indent + indent + indent + "Number of Instance" + indent + indent + "Total Execution Time" + indent + indent + indent + "Total Cost ($)");
+        for (Map.Entry<String, Double> vm : runningVmNames.entrySet()) {
+            Log.println(vm.getKey() +
+                    indent + indent + indent + indent + (VmProvisioningStrategy.getNumberOfEachInstance().get(vm.getKey())+1) +
+                    indent + indent + indent +  indent + indent + runningVmNames.get(vm.getKey()) +
+                    indent + indent + indent +  indent + indent + dft1.format(totalCostPerVm.get(vm.getKey())));
+        }
+
+//        Map<Integer, Double> sortedvmExecutionTimes = new TreeMap<>(vmExecutionTimes);
+//        Log.println();
+//        Log.println();
+//        Log.println("======== VM Times ========");
+//        Log.println("VM ID" + indent + indent + "ExecutionTime");
+//        for (Map.Entry<Integer, Double> entry : sortedvmExecutionTimes.entrySet()) {
+//            Log.println(entry.getKey()+ indent + indent + entry.getValue());
 //        }
 
+    }
+
+    private static String findInstanceNameByVmId(int vmId) {
+        for (Map.Entry<String, Map<Integer, Vm>> outerEntry : VmProvisioningStrategy.getRunningVms().entrySet()) {
+            for (Map.Entry<Integer, Vm> innerEntry : outerEntry.getValue().entrySet()) {
+                if (innerEntry.getKey() == vmId) {
+                    return outerEntry.getKey();
+                }
+            }
+        }
+        return null;
     }
 
 }
