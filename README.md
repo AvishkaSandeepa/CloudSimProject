@@ -20,6 +20,10 @@ This repository stores the Java files for a given CloudSim assignment. CLOUDs LA
 
 To understand VM usage, I present graphs of cost and execution time per VM instance. (*consider all running VMs for these graphs*). I used google colab to run my [Python notebook file](https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/python-code/cloudsim_histogram.ipynb) to get the following results.
 
+
+
+**SPECIAL NOTICE !** -----> *Log scale is used for the y-axis of the first two graphs given below because the variation of the y-axis cannot be shown on a single graph using a normal scale*
+
 `Graphs`
 
 Execution Time vs VM Instance
