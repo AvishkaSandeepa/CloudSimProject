@@ -13,3 +13,29 @@ This repository stores the Java files for a given CloudSim assignment. CLOUDs LA
 5. The sample project structure can be found :
 
 <img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/java-code/project-structure.png" alt="Sample project structure" style="width:400px;"/>
+
+
+
+### +++++++++++++++++++++ Result Comparison +++++++++++++++++++++
+
+To understand VM usage, I present graphs of cost and execution time per VM instance. (*consider all running VMs for these graphs*). I used google colab to run my [Python notebook file](https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/python-code/cloudsim_histogram.ipynb) to get the following results.
+
+`Graphs`
+
+Execution Time vs VM Instance
+
+
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/python-code/Images/Time-vs-VMs.png" alt="Execution Time vs VM Instance" style="width:2000px;"/>
+
+
+Cost vs VM Instance
+
+
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/python-code/Images/Cost-vs-VMs.png" alt="Cost vs VM Instance" style="width:2000px;"/>
+
+
+*---------------------------------------------------------------------------------------------------------------------------------------------------------*
+
+Usage of each commercially available VM Instances (Time usage and Cost)
+
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/python-code/Images/TotalTimeAndCost-vs-UsedInstance.png" alt="Usage of each commercially available VM Instances" style="width:2000px;"/>
