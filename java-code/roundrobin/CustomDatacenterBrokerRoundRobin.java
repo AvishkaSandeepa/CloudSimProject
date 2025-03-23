@@ -1,6 +1,10 @@
 package org.cloudbus.cloudsim.project.roundrobin;
 
 import org.cloudbus.cloudsim.*;
+import org.cloudbus.cloudsim.core.CloudActionTags;
+import org.cloudbus.cloudsim.core.CloudSim;
+import org.cloudbus.cloudsim.core.GuestEntity;
+import org.cloudbus.cloudsim.lists.VmList;
 import org.cloudbus.cloudsim.project.comon.CloudletDetails;
 import org.cloudbus.cloudsim.project.dynamicvmprovisioning.DynamicVMProvisioningStrategy;
 
@@ -88,7 +92,7 @@ public class CustomDatacenterBrokerRoundRobin extends DatacenterBroker {
     @Override
     public void startEntity() {
         super.startEntity();
-        vmlist = DynamicVMProvisioningStrategy.provisionVms(getCloudletList(), getId());
+        vmlist = FixedVMSelectionForRoundRobin.findBestInstance(getCloudletList(), getId());
         submitGuestList(vmlist);
     }
 
@@ -96,57 +100,64 @@ public class CustomDatacenterBrokerRoundRobin extends DatacenterBroker {
     // ==============================================
     // Implement round robin algorithm to assign VMs to cloudlet
     // Ensure Cloudlets Are Assigned in a Cyclic Manner
-//    @Override
-//    protected void submitCloudlets() {
-//        List<CloudletDetails> successfullySubmitted = new ArrayList<>();
-//        List<CloudletDetails> cloudlets = getCloudletList();
-//        List<GuestEntity> createdVmList = getGuestsCreatedList();
-//        int numCreatedVms = createdVmList.size();
-//
-//        if (numCreatedVms == 0) {
-//            System.err.println(CloudSim.clock() + ": " + getName() + ": Error: No created VMs available for scheduling.");
-//            return;
-//        }
-//
-//        for (CloudletDetails cloudlet : cloudlets) {
-//            GuestEntity vm;
-//            vm = createdVmList.get(lastVmIndex % numCreatedVms);
-//            if (cloudlet.getGuestId() != -1) {
-//                GuestEntity specificVm = VmList.getById(createdVmList, cloudlet.getGuestId());
-//                if (specificVm != null) {
-////                    vm = specificVm; // Override round-robin if a specific vm is designated.
-//                } else { // submit to the specific vm
-//                    vm = VmList.getById(getGuestsCreatedList(), cloudlet.getGuestId());
-//                    if (vm == null) { // vm was not created
-//                        vm = VmList.getById(getGuestList(), cloudlet.getGuestId()); // check if exists in the submitted list
-//
-//                        if (!Log.isDisabled()) {
-//                            if (vm != null) {
-//                                Log.printlnConcat(CloudSim.clock(), ": ", getName(), ": Postponing execution of cloudlet ", cloudlet.getCloudletId(), ": bount ", vm.getClassName(), " #", vm.getId(), " not available");
-//                            } else {
-//                                Log.printlnConcat(CloudSim.clock(), ": ", getName(), ": Postponing execution of cloudlet ", cloudlet.getCloudletId(), ": bount guest entity of id ", cloudlet.getGuestId(), " doesn't exist");
-//                            }
-//                        }
-//                        continue;
-//                    }
-//                }
-//            }
-//            if (!Log.isDisabled()) {
-//                Log.printlnConcat(CloudSim.clock(), ": ", getName(), ": Sending ", cloudlet.getClass().getSimpleName(),
-//                        " #", cloudlet.getCloudletId(), " to " + vm.getClassName() + " #", vm.getId());
-//            }
-//
-//            cloudlet.setGuestId(vm.getId());
-//            sendNow(getVmsToDatacentersMap().get(vm.getId()), CloudActionTags.CLOUDLET_SUBMIT, cloudlet);
-//            cloudletsSubmitted++;
-//            lastVmIndex++;
-//            guestIndex = (guestIndex + 1) % numCreatedVms; // Round-robin increment
-//            getCloudletSubmittedList().add(cloudlet);
-//            successfullySubmitted.add(cloudlet);
-//        }
-//
-//        // remove submitted cloudlets from waiting list
-//        getCloudletList().removeAll(successfullySubmitted);
-//    }
+    @Override
+    protected void submitCloudlets() {
+        List<CloudletDetails> successfullySubmitted = new ArrayList<>();
+        List<CloudletDetails> cloudlets = getCloudletList();
+        List<GuestEntity> createdVmList = getGuestsCreatedList();
+        int numCreatedVms = createdVmList.size();
+
+        if (numCreatedVms == 0) {
+            System.err.println(CloudSim.clock() + ": " + getName() + ": Error: No created VMs available for scheduling.");
+            return;
+        }
+
+        for (CloudletDetails cloudlet : cloudlets) {
+            GuestEntity vm;
+            vm = createdVmList.get(lastVmIndex % numCreatedVms);
+            if (cloudlet.getGuestId() != -1) {
+                GuestEntity specificVm = VmList.getById(createdVmList, cloudlet.getGuestId());
+                if (specificVm != null) {
+                    vm = specificVm; // Override round-robin if a specific vm is designated.
+                } else { // submit to the specific vm
+                    vm = VmList.getById(getGuestsCreatedList(), cloudlet.getGuestId());
+                    if (vm == null) { // vm was not created
+                        vm = VmList.getById(getGuestList(), cloudlet.getGuestId()); // check if exists in the submitted list
+
+                        if (!Log.isDisabled()) {
+                            if (vm != null) {
+                                Log.printlnConcat(CloudSim.clock(), ": ", getName(), ": Postponing execution of cloudlet ", cloudlet.getCloudletId(), ": bount ", vm.getClassName(), " #", vm.getId(), " not available");
+                            } else {
+                                Log.printlnConcat(CloudSim.clock(), ": ", getName(), ": Postponing execution of cloudlet ", cloudlet.getCloudletId(), ": bount guest entity of id ", cloudlet.getGuestId(), " doesn't exist");
+                            }
+                        }
+                        continue;
+                    }
+                }
+            }
+            if (!Log.isDisabled()) {
+                Log.printlnConcat(CloudSim.clock(), ": ", getName(), ": Sending ", cloudlet.getClass().getSimpleName(),
+                        " #", cloudlet.getCloudletId(), " to " + vm.getClassName() + " #", vm.getId());
+            }
+
+            double currentTime = CloudSim.clock();
+            double delay = cloudlet.getCloudletSubmissionTime() - currentTime;
+            if (delay > 0) {
+                cloudlet.setGuestId(vm.getId());
+                send(getVmsToDatacentersMap().get(vm.getId()), delay, CloudActionTags.CLOUDLET_SUBMIT, cloudlet);
+                cloudletsSubmitted++;
+                lastVmIndex++;
+                guestIndex = (guestIndex + 1) % numCreatedVms; // Round-robin increment
+                getCloudletSubmittedList().add(cloudlet);
+                successfullySubmitted.add(cloudlet);
+            } else {
+                System.err.println("Task cannot be executed. current simulation time passes the task submission time. cloudletID : " + cloudlet.getCloudletId());
+            }
+
+        }
+
+        // remove submitted cloudlets from waiting list
+        getCloudletList().removeAll(successfullySubmitted);
+    }
 
 }

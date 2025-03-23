@@ -5,18 +5,20 @@ import org.cloudbus.cloudsim.Vm;
 import org.cloudbus.cloudsim.project.comon.CloudletDetails;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * ASSUMPTION :: Allowed to create only 100 of VMs per instance without interruption (within the datacenter boundaries)
+ *               Create next VMs on next suitable instance, if the above bound is exceeded !!
+ */
 public class FixedVMSelectionForRoundRobin {
     // Consider 1000 MIPS per vCpu
     private static final double MIPS_PER_VCPU = 1000.0;
 
     private static final Map<String, InstanceType> INSTANCE_TYPES = new LinkedHashMap<>();
-    private static final Map<Integer, Map<Integer, Double>> vmStartTimes = new HashMap<>();  // <VMID, <CORE , START>
-    private static final Map<Integer, Map<Integer, Double>> vmFinishTimes = new HashMap<>(); // <VMID, <CORE , START>
-    private static final Map<Integer, Integer> coresOccupied = new HashMap<>();
     private static final Map<String, Integer> numberOfEachInstance = new HashMap<>();
-    private static final Map<Integer, Map<Integer, CloudletDetails>> vmToCloudlets = new HashMap<>();
     private static final Map<String, Map<Integer, Vm>> runningVms = new HashMap<>();
+    private static final List<Integer> createdVMIDs = new ArrayList<>();
 
     // initializing few of many commercially available VMs
     static {
@@ -46,169 +48,97 @@ public class FixedVMSelectionForRoundRobin {
         INSTANCE_TYPES.put("t4g.small", new InstanceType(2, 2048, 100000, 0.0212, false));
     }
 
-    public static Map<String, Map<Integer, Vm>> getRunningVms() {
-        return runningVms;
-    }
 
     public static Map<String, Integer> getNumberOfEachInstance() {
         return numberOfEachInstance;
     }
 
-    // Finding best instance
-    private static InstanceType findBestInstance(CloudletDetails cloudlet) {
-        InstanceType bestInstance = new InstanceType(0, 0, 0, 0.0, false);
-        double minCostHourly = Double.MAX_VALUE;
-
-        for (Map.Entry<String, InstanceType> entry : INSTANCE_TYPES.entrySet()) {
-            InstanceType instance = entry.getValue();
-            double estimatedCompletionTime = cloudlet.getCloudletSubmissionTime() + (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
-            if (instance.vCpus >= cloudlet.getNumberOfPes() && instance.ram >= cloudlet.getMinMemoryToExecute() && instance.storage >= cloudlet.getMinStorageToExecute()) {
-                if (instance.hourlyCost < minCostHourly && estimatedCompletionTime < cloudlet.getDeadline()) {
-                    minCostHourly = instance.hourlyCost;
-                    bestInstance = instance;
-                    cloudlet.setBestInstance(entry.getKey());
-                    cloudlet.setHourlyPrice(minCostHourly);
-                    bestInstance.setSuitableVm(true);
-                }
-            }
-        }
-        return bestInstance;
+    public static List<Integer> getCreatedVMIDs() {
+        return createdVMIDs;
     }
 
-    // provisioning
-    public static List<Vm> provisionVms(List<CloudletDetails> cloudlets, int userId) {
-        List<Vm> vmList = new ArrayList<>();
-        Collections.sort(cloudlets, Comparator.comparingDouble(CloudletDetails::getCloudletSubmissionTime));
+    public static String getInstanceNameByVmId(int vmId) {
+        for (Map.Entry<String, Map<Integer, Vm>> instanceEntry : runningVms.entrySet()) {
+            if (instanceEntry.getValue().containsKey(vmId)) {
+                return instanceEntry.getKey();
+            }
+        }
+        return null; // Or throw an exception if the VM ID is not found
+    }
 
-        // Iterate through given cloudlets for better execution
-        for (CloudletDetails cloudlet : cloudlets) {
-            InstanceType bestInstance = findBestInstance(cloudlet);
-            if (!bestInstance.suitableVm) {
-                System.err.println("No suitable VM found for Cloudlet: " + cloudlet.getCloudletId() + " with " + cloudlet.getCloudletLength() + " MIPS before deadline : " + cloudlet.getDeadline());
+    public static double getHourlyPriceByVmId(int vmId) {
+        String instanceName = getInstanceNameByVmId(vmId);
+        if (instanceName != null) {
+            return getHourlyPrice(instanceName); // Use the existing getHourlyPrice method
+        } else {
+            return -1.0; // Or throw an exception if the VM ID is not found
+        }
+    }
+
+    public static double getHourlyPrice(String instanceKey) {
+        if (INSTANCE_TYPES.containsKey(instanceKey)) {
+            return INSTANCE_TYPES.get(instanceKey).hourlyCost;
+        } else {
+            // Handle the case where the key is not found (e.g., throw an exception or return a default value)
+            return -1.0; // Or throw an IllegalArgumentException
+        }
+    }
+
+    // Finding best instance
+    public static List<Vm> findBestInstance(List<CloudletDetails> cloudletDetails, int userId) {
+        List<Vm> vmList = new ArrayList<>();
+
+        for (CloudletDetails cloudlet : cloudletDetails) {
+            InstanceType bestInstance = new InstanceType(0, 0, 0, 0.0, false);
+            Map<String, Double> selectedVmInstances = new HashMap<>();
+
+            for (Map.Entry<String, InstanceType> entry : INSTANCE_TYPES.entrySet()) {
+                InstanceType instance = entry.getValue();
+                if (instance.vCpus >= cloudlet.getNumberOfPes() && instance.ram >= cloudlet.getMinMemoryToExecute() && instance.storage >= cloudlet.getMinStorageToExecute()) {
+                    selectedVmInstances.put(entry.getKey(), instance.hourlyCost);
+                }
             }
 
-            String instanceName = getInstanceName(bestInstance);
-            if (runningVms.containsKey(instanceName)) {
-                boolean cloudletDone = false;
-                for (Map.Entry<Integer, Vm> vmEntry : runningVms.get(instanceName).entrySet()) {
-                    Vm vm = vmEntry.getValue();
-                    int coresAvailable = bestInstance.vCpus - coresOccupied.get(vm.getId());
-                    if (coresAvailable > 0 && coresAvailable >= cloudlet.getNumberOfPes()) {
-                        vmToCloudlets.computeIfAbsent(vm.getId(), k -> new HashMap<>()).put(coresOccupied.get(vm.getId()), cloudlet); // assign next available core for cloudlet
-                        cloudlet.setGuestId(vm.getId()); // set the cloudlet guest ID.
-                        updateDetailsForVm(1, cloudlet, vm.getId(), 0, bestInstance);
-                        cloudletDone = true;
-                        break;
-                    } else {
-                        List<Integer> checkings = new ArrayList<>();
-                        int coreFlag = 0;
-                        for (int i = 0; i < vm.getNumberOfPes(); i++) {
-                            // check whether the task can be executed on given VM which has higher or equal amount of PEs utilized by current cloudlet
-                            if (vmToCloudlets.containsKey(vm.getId()) && vmToCloudlets.get(vm.getId()).containsKey(i)) {
-                                boolean isEnoughCoresAvailable = vmToCloudlets.get(vm.getId()).get(i).getNumberOfPes() >= cloudlet.getNumberOfPes();
-                                if (!isEnoughCoresAvailable) {
-                                    continue;
-                                }
-                            }
-                            int check = checkSuitability(cloudlet, vm, i, bestInstance);
-                            if (check == 1) {
-                                coreFlag = i;
-                            }
-                            checkings.add(check);
-                        }
+            Map<String, Double> sortedSelectedVmInstances = selectedVmInstances.entrySet()
+                    .stream()
+                    .sorted(Map.Entry.comparingByValue())
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            Map.Entry::getValue,
+                            (e1, e2) -> e1,
+                            LinkedHashMap::new));
 
-                        // create a new VM or use existing one according to the check doing under for loop
-                        if (checkings.contains(1)) {
-                            int currentCore = 0;
-                            for (Map.Entry<Integer, CloudletDetails> cloudletEntry : vmToCloudlets.get(vm.getId()).entrySet()) {
-                                if (cloudletEntry.getValue().getCloudletId() == vmToCloudlets.get(vm.getId()).get(coreFlag).getCloudletId())
-                                    currentCore = cloudletEntry.getKey();
-                            }
-                            vmToCloudlets.computeIfAbsent(vm.getId(), k -> new HashMap<>()).put(currentCore, cloudlet);
-                            cloudlet.setGuestId(vm.getId()); // set the cloudlet guest ID.
-                            updateDetailsForVm(2, cloudlet, vm.getId(), currentCore, bestInstance);
-                        } else {
-                            // Create another VM for same instance
-                            numberOfEachInstance.put(instanceName, numberOfEachInstance.get(instanceName) + 1);
-                            Vm newVm = createVm(userId, instanceName, bestInstance);
-                            vmList.add(newVm);
-                            runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(newVm.getId(), newVm);
-                            updateDetailsForVm(0, cloudlet, newVm.getId(), 0, bestInstance); // update the usage of given VM
-                            vmToCloudlets.computeIfAbsent(newVm.getId(), k -> new HashMap<>()).put(0, cloudlet);
-                            cloudlet.setGuestId(newVm.getId()); // set the cloudlet guest ID.
-                        }
-                        cloudletDone = true;
-                        break;
+            for (Map.Entry<String, Double> sortedEntry : sortedSelectedVmInstances.entrySet()) {
+                String instanceName = sortedEntry.getKey();
+                System.out.println("Checking instance: " + instanceName); // Debugging
+
+                if (numberOfEachInstance.containsKey(instanceName)) {
+                    int currentCount = numberOfEachInstance.get(instanceName);
+                    System.out.println("Current count for " + instanceName + ": " + currentCount); // Debugging
+
+                    if (currentCount < 100) { // Changed to < from <=
+                        bestInstance = INSTANCE_TYPES.get(instanceName);
+                        Vm vm = createVm(userId, instanceName, bestInstance);
+                        vmList.add(vm);
+                        createdVMIDs.add(vm.getId());
+                        runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(vm.getId(), vm);
+                        numberOfEachInstance.put(instanceName, currentCount + 1);
+                        System.out.println("Updated count for " + instanceName + ": " + (currentCount + 1)); // Debugging
                     }
+                    break;
+                } else {
+                    bestInstance = INSTANCE_TYPES.get(instanceName);
+                    Vm vm = createVm(userId, instanceName, bestInstance);
+                    vmList.add(vm);
+                    createdVMIDs.add(vm.getId());
+                    numberOfEachInstance.put(instanceName, 1);
+                    runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(vm.getId(), vm);
+                    System.out.println("First instance of " + instanceName + " created."); // Debugging
+                    break;
                 }
-                if (!cloudletDone) {
-                    // Create another VM for same instance
-                    numberOfEachInstance.put(instanceName, numberOfEachInstance.get(instanceName) + 1);
-                    Vm newVm = createVm(userId, instanceName, bestInstance);
-                    vmList.add(newVm);
-                    runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(newVm.getId(), newVm);
-                    updateDetailsForVm(0, cloudlet, newVm.getId(), 0, bestInstance); // update the usage of given VM
-                    vmToCloudlets.computeIfAbsent(newVm.getId(), k -> new HashMap<>()).put(0, cloudlet);
-                    cloudlet.setGuestId(newVm.getId()); // set the cloudlet guest ID.
-                }
-            } else {
-                numberOfEachInstance.put(instanceName, 0);
-                Vm vm = createVm(userId, instanceName, bestInstance);
-                vmList.add(vm);
-                runningVms.computeIfAbsent(instanceName, k -> new HashMap<>()).put(vm.getId(), vm);
-                updateDetailsForVm(0, cloudlet, vm.getId(), 0, bestInstance); // update the usage of given VM
-                vmToCloudlets.computeIfAbsent(vm.getId(), k -> new HashMap<>()).put(0, cloudlet);
-                cloudlet.setGuestId(vm.getId()); // set the cloudlet guest ID.
             }
         }
         return vmList;
-    }
-
-    private static void updateDetailsForVm(int flag, CloudletDetails cloudlet, int vmId, int coreToBe, InstanceType instance) {
-        double estimatedCompletionTime = cloudlet.getCloudletSubmissionTime() + (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
-        if (flag == 0) { // New Vm creation with all free cores
-            coresOccupied.put(vmId, cloudlet.getNumberOfPes());
-            vmStartTimes.computeIfAbsent(vmId, k -> new HashMap<>()).put(0, cloudlet.getCloudletSubmissionTime());
-            vmFinishTimes.computeIfAbsent(vmId, k -> new HashMap<>()).put(0, estimatedCompletionTime);
-        } else if (flag == 1) { // Using existing Vm with free cores
-            int core = coresOccupied.get(vmId);
-            coresOccupied.put(vmId, coresOccupied.get(vmId) + cloudlet.getNumberOfPes());
-            vmStartTimes.computeIfAbsent(vmId, k -> new HashMap<>()).put(core, cloudlet.getCloudletSubmissionTime());
-            vmFinishTimes.computeIfAbsent(vmId, k -> new HashMap<>()).put(core, estimatedCompletionTime);
-        } else if (flag == 2) { // cases where override the existing data where cloudlet can be started after finishing of the current cloudlet
-            vmStartTimes.computeIfAbsent(vmId, k -> new HashMap<>()).put(coreToBe, cloudlet.getCloudletSubmissionTime());
-            vmFinishTimes.computeIfAbsent(vmId, k -> new HashMap<>()).put(coreToBe, estimatedCompletionTime);
-        }
-    }
-
-    private static int checkSuitability(CloudletDetails cloudlet, Vm vm, int core, InstanceType instance) {
-        int result;
-        double completionTime = (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
-        double startTime = cloudlet.getCloudletSubmissionTime();
-        if (vmFinishTimes.containsKey(vm.getId()) && vmFinishTimes.get(vm.getId()).containsKey(core) && vmToCloudlets.containsKey(vm.getId()) && vmToCloudlets.get(vm.getId()).containsKey(core)) {
-            double finishTimeOfPrevCloudlet = vmFinishTimes.get(vm.getId()).get(core);
-            if (startTime > finishTimeOfPrevCloudlet) {
-                if (cloudlet.getDeadline() > startTime + completionTime) {
-                    result = 1; // All good (Allow to use the selected running VM for this cloudlet
-                } else {
-                    result = 2; // cloudlet can be started in given VM but passes the deadline at the end
-                }
-            } else {
-                result = 2; // cloudlet can not be started at given submission time on this VM
-            }
-        } else {
-            result = -1; // cases where cloudlets utilize multiple cores, if cloudlet use 2 cores, core numbering at 0 and 2
-        }
-        return result;
-    }
-
-    private static String getInstanceName(InstanceType instance) {
-        for (Map.Entry<String, FixedVMSelectionForRoundRobin.InstanceType> entry : INSTANCE_TYPES.entrySet()) {
-            if (entry.getValue().equals(instance)) {
-                return entry.getKey();
-            }
-        }
-        return null;
     }
 
     private static int createDynamicVmID(int userId, String instanceName, int numberOfInstance) {
@@ -217,11 +147,10 @@ public class FixedVMSelectionForRoundRobin {
     }
 
     private static Vm createVm(int userId, String instanceName, InstanceType instance) {
-        int mips = (int) (instance.vCpus * MIPS_PER_VCPU);
         return new Vm(
-                createDynamicVmID(userId, instanceName, numberOfEachInstance.getOrDefault(instanceName, 0)),
+                createDynamicVmID(userId, instanceName, numberOfEachInstance.getOrDefault(instanceName, 1)),
                 userId,
-                mips,
+                MIPS_PER_VCPU,
                 instance.vCpus,
                 instance.ram,
                 10000,
@@ -248,6 +177,10 @@ public class FixedVMSelectionForRoundRobin {
         public void setSuitableVm(boolean suitableVm) {
             this.suitableVm = suitableVm;
         }
+    }
+
+    public static Map<String, Map<Integer, Vm>> getRunningVms() {
+        return runningVms;
     }
 
 }

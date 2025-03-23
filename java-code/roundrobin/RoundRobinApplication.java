@@ -23,6 +23,7 @@ public class RoundRobinApplication {
      * If there are multiple brokers, we should avoid using static as it can be override the variables, since it will be used across multiple entities
      */
     public static CustomDatacenterBrokerRoundRobin broker;
+    private static final String filePath = "F:/Avishka-Sandeepa-PHD/Project/cloudsim/modules/cloudsim-examples/src/main/java/org/cloudbus/cloudsim/project/dataset/cloudlet.txt";
 
     /** The vmlist. */
     private static List<Vm> vmlist;
@@ -42,8 +43,7 @@ public class RoundRobinApplication {
             Datacenter datacenter = createDatacenter("Datacenter_0", 500, 8);
 
             // ----------- Third Step: Creating a single broker, since these cloudlets are handle by single user/organization
-            broker = new CustomDatacenterBrokerRoundRobin("Broker",
-                    "F:/Avishka-Sandeepa-PHD/Project/cloudsim/modules/cloudsim-examples/src/main/java/org/cloudbus/cloudsim/project/cloudlet.txt");
+            broker = new CustomDatacenterBrokerRoundRobin("Broker", filePath);
 
             //----------- Fourth Step: Create VMs and Cloudlets and send them to broker
             CloudSim.startSimulation();
@@ -158,8 +158,7 @@ public class RoundRobinApplication {
                 "Data center ID" + indent + "VM ID" + indent + indent +
                 "SubmissionTime" + indent + indent + "Time" + indent + indent +
                 "Start Time" + indent + "Finish Time" + indent + indent +
-//                "Deadline" + indent +
-                "VM Instance" + indent + indent + "Price Per Hour($)" + indent + indent + "Price for consumption ($)");
+                "Price for consumption ($)");
 
         DecimalFormat dft = new DecimalFormat("###.##");
         DecimalFormat dft1 = new DecimalFormat("###.#######");
@@ -168,41 +167,36 @@ public class RoundRobinApplication {
         double totalCost = 0.0;
         for (CloudletDetails value : list) {
             cloudlet = value;
-            Log.print(indent + cloudlet.getCloudletId() + indent + indent);
-            totalCost += cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0);
-
-//            if (!runningVmNames.containsKey(cloudlet.getBestInstance())) {
-//                runningVmNames.put(cloudlet.getBestInstance(), 0.0);
-//            }
-
             int vmId = cloudlet.getGuestId();
-            double executionTime = cloudlet.getExecFinishTime() - cloudlet.getExecStartTime();
-            vmExecutionTimes.merge(vmId, executionTime, Double::sum);
-            vmCostTimes.merge(vmId, cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0), Double::sum);
-            String foundInstanceName = findInstanceNameByVmId(vmId);
-            runningVmNames.merge(foundInstanceName, executionTime, Double::sum);
-            totalCostPerVm.merge(foundInstanceName, cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0), Double::sum);
+            Log.print(indent + cloudlet.getCloudletId() + indent + indent);
 
-//            if (cloudlet.getDeadline() < cloudlet.getExecFinishTime()) System.err.println("ERRRRRRRR");
-            if (cloudlet.getStatus() == CloudletDetails.CloudletStatus.SUCCESS && Objects.nonNull(cloudlet.getBestInstance())) {
+            double executionTime = cloudlet.getExecFinishTime() - cloudlet.getExecStartTime();
+            String foundInstanceName = FixedVMSelectionForRoundRobin.getInstanceNameByVmId(vmId);
+            double hourlyPrice = FixedVMSelectionForRoundRobin.getHourlyPrice(foundInstanceName);
+
+            vmExecutionTimes.merge(vmId, executionTime, Double::sum);
+            vmCostTimes.merge(vmId, cloudlet.getActualCPUTime() * (hourlyPrice/3600.0), Double::sum);
+
+            totalCost += cloudlet.getActualCPUTime() * (hourlyPrice/3600.0);
+            runningVmNames.merge(foundInstanceName, executionTime, Double::sum);
+            totalCostPerVm.merge(foundInstanceName, cloudlet.getActualCPUTime() * (hourlyPrice/3600.0), Double::sum);
+
+            if (cloudlet.getStatus() == CloudletDetails.CloudletStatus.SUCCESS) {
                 Log.print("SUCCESS");
                 totalCompleted++;
 
                 if (!vms.contains(cloudlet.getBestInstance())) vms.add(cloudlet.getBestInstance());
-                Log.println(indent + indent + cloudlet.getResourceId() + indent + indent + indent + indent + cloudlet.getGuestId() +
+                Log.println(indent + indent + cloudlet.getResourceId() + indent + indent + indent + indent + vmId +
                         indent + indent + indent + dft.format(cloudlet.getCloudletSubmissionTime()) +
                         indent + indent + indent + indent + dft.format(cloudlet.getActualCPUTime()) +
                         indent + indent + indent + dft.format(cloudlet.getExecStartTime()) +
                         indent + indent + indent + dft.format(cloudlet.getExecFinishTime()) +
-//                        indent + indent + indent + cloudlet.getDeadline() +
-                        indent + indent + indent + cloudlet.getBestInstance() +
-                        indent + indent + indent + cloudlet.getHourlyPrice() +
-                        indent + indent + indent + indent + indent + dft1.format(cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0)));
+                        indent + indent + indent + indent + indent + dft1.format(cloudlet.getActualCPUTime() * (hourlyPrice/3600.0)));
             }
         }
 
         Log.println();
-        Log.println("No of VMs --> " + " | Total cost for VMs --> $ " + dft1.format(totalCost));
+        Log.println("No of VMs --> " + (!FixedVMSelectionForRoundRobin.getCreatedVMIDs().isEmpty() ? FixedVMSelectionForRoundRobin.getCreatedVMIDs().size() : 0) +" | Total cost for VMs --> $ " + dft1.format(totalCost));
         Log.println();
 
         Log.println("Total No of cloudlets completed : " + totalCompleted + " out of " + CustomDatacenterBrokerRoundRobin.getTotalCloudletRead());
@@ -210,7 +204,7 @@ public class RoundRobinApplication {
         Log.println("VM Name" + indent + indent + indent + "Number of Instance" + indent + indent + "Total Execution Time" + indent + indent + indent + "Total Cost ($)");
         for (Map.Entry<String, Double> vm : runningVmNames.entrySet()) {
             Log.println(vm.getKey() +
-                    indent + indent + indent + indent + (DynamicVMProvisioningStrategy.getNumberOfEachInstance().get(vm.getKey())+1) +
+                    indent + indent + indent + indent + (FixedVMSelectionForRoundRobin.getNumberOfEachInstance().get(vm.getKey())) +
                     indent + indent + indent +  indent + indent + runningVmNames.get(vm.getKey()) +
                     indent + indent + indent +  indent + indent + dft1.format(totalCostPerVm.get(vm.getKey())));
         }
@@ -256,19 +250,6 @@ public class RoundRobinApplication {
             }
             Log.println();
         }
-
-
-    }
-
-    private static String findInstanceNameByVmId(int vmId) {
-        for (Map.Entry<String, Map<Integer, Vm>> outerEntry : DynamicVMProvisioningStrategy.getRunningVms().entrySet()) {
-            for (Map.Entry<Integer, Vm> innerEntry : outerEntry.getValue().entrySet()) {
-                if (innerEntry.getKey() == vmId) {
-                    return outerEntry.getKey();
-                }
-            }
-        }
-        return null;
     }
 
 }
