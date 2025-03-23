@@ -1,11 +1,12 @@
-package org.cloudbus.cloudsim.project;
+package org.cloudbus.cloudsim.project.dynamicvmprovisioning;
 
 import org.cloudbus.cloudsim.CloudletSchedulerTimeShared;
 import org.cloudbus.cloudsim.Vm;
+import org.cloudbus.cloudsim.project.comon.CloudletDetails;
 
 import java.util.*;
 
-public class VmProvisioningStrategy {
+public class DynamicVMProvisioningStrategy {
     // Consider 1000 MIPS per vCpu
     private static final double MIPS_PER_VCPU = 1000.0;
 
@@ -60,7 +61,7 @@ public class VmProvisioningStrategy {
 
         for (Map.Entry<String, InstanceType> entry : INSTANCE_TYPES.entrySet()) {
             InstanceType instance = entry.getValue();
-            double estimatedCompletionTime = cloudlet.getCloudletSubmissionTime() + (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
+            double estimatedCompletionTime = cloudlet.getCloudletSubmissionTime() + (double) cloudlet.getCloudletLength() / (cloudlet.getNumberOfPes() * MIPS_PER_VCPU);
             if (instance.vCpus >= cloudlet.getNumberOfPes() && instance.ram >= cloudlet.getMinMemoryToExecute() && instance.storage >= cloudlet.getMinStorageToExecute()) {
                 if (instance.hourlyCost < minCostHourly && estimatedCompletionTime < cloudlet.getDeadline()) {
                     minCostHourly = instance.hourlyCost;
@@ -103,9 +104,11 @@ public class VmProvisioningStrategy {
                         int coreFlag = 0;
                         for (int i = 0; i < vm.getNumberOfPes(); i++) {
                             // check whether the task can be executed on given VM which has higher or equal amount of PEs utilized by current cloudlet
-                            boolean isEnoughCoresAvailable = vmToCloudlets.get(vm.getId()).get(i).getNumberOfPes() >= cloudlet.getNumberOfPes();
-                            if (!isEnoughCoresAvailable) {
-                                continue;
+                            if (vmToCloudlets.containsKey(vm.getId()) && vmToCloudlets.get(vm.getId()).containsKey(i)) {
+                                boolean isEnoughCoresAvailable = vmToCloudlets.get(vm.getId()).get(i).getNumberOfPes() >= cloudlet.getNumberOfPes();
+                                if (!isEnoughCoresAvailable) {
+                                    continue;
+                                }
                             }
                             int check = checkSuitability(cloudlet, vm, i, bestInstance);
                             if (check == 1) {
@@ -162,7 +165,7 @@ public class VmProvisioningStrategy {
     }
 
     private static void updateDetailsForVm(int flag, CloudletDetails cloudlet, int vmId, int coreToBe, InstanceType instance) {
-        double estimatedCompletionTime = cloudlet.getCloudletSubmissionTime() + (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
+        double estimatedCompletionTime = cloudlet.getCloudletSubmissionTime() + (double) cloudlet.getCloudletLength() / (cloudlet.getNumberOfPes() * MIPS_PER_VCPU);
         if (flag == 0) { // New Vm creation with all free cores
             coresOccupied.put(vmId, cloudlet.getNumberOfPes());
             vmStartTimes.computeIfAbsent(vmId, k -> new HashMap<>()).put(0, cloudlet.getCloudletSubmissionTime());
@@ -180,7 +183,7 @@ public class VmProvisioningStrategy {
 
     private static int checkSuitability(CloudletDetails cloudlet, Vm vm, int core, InstanceType instance) {
         int result;
-        double completionTime = (double) cloudlet.getCloudletLength() / (instance.vCpus * MIPS_PER_VCPU);
+        double completionTime = (double) cloudlet.getCloudletLength() / (cloudlet.getNumberOfPes() * MIPS_PER_VCPU);
         double startTime = cloudlet.getCloudletSubmissionTime();
         if (vmFinishTimes.containsKey(vm.getId()) && vmFinishTimes.get(vm.getId()).containsKey(core) && vmToCloudlets.containsKey(vm.getId()) && vmToCloudlets.get(vm.getId()).containsKey(core)) {
             double finishTimeOfPrevCloudlet = vmFinishTimes.get(vm.getId()).get(core);
@@ -200,7 +203,7 @@ public class VmProvisioningStrategy {
     }
 
     private static String getInstanceName(InstanceType instance) {
-        for (Map.Entry<String, VmProvisioningStrategy.InstanceType> entry : INSTANCE_TYPES.entrySet()) {
+        for (Map.Entry<String, DynamicVMProvisioningStrategy.InstanceType> entry : INSTANCE_TYPES.entrySet()) {
             if (entry.getValue().equals(instance)) {
                 return entry.getKey();
             }
@@ -214,11 +217,10 @@ public class VmProvisioningStrategy {
     }
 
     private static Vm createVm(int userId, String instanceName, InstanceType instance) {
-        int mips = (int) (instance.vCpus * MIPS_PER_VCPU);
         return new Vm(
                 createDynamicVmID(userId, instanceName, numberOfEachInstance.getOrDefault(instanceName, 0)),
                 userId,
-                mips,
+                MIPS_PER_VCPU,
                 instance.vCpus,
                 instance.ram,
                 10000,

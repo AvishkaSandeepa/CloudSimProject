@@ -1,30 +1,28 @@
-package org.cloudbus.cloudsim.project;
+package org.cloudbus.cloudsim.project.dynamicvmprovisioning;
 
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudSim;
+import org.cloudbus.cloudsim.project.comon.CloudletDetails;
 import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
 
-import javax.swing.*;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.*;
 
 /**
- * This is a question no.1 of CloudSim assignment
+ * This is a question no.2 of CloudSim assignment
 
  * main class of simulation of executing cloudlets using a file
  * need a creation of a custom broker class for that
  */
-public class QuestionTwo {
+public class DynamicVMProvisionApplication {
     /**
      * Define these variables as static variables due to the easy access from main method all across the class
      * If there are multiple brokers, we should avoid using static as it can be override the variables, since it will be used across multiple entities
      */
-    public static CustomDatacenterBroker broker;
+    public static CustomDatacenterBrokerForDynamicVMProvision broker;
+    private static final String filePath = "F:/Avishka-Sandeepa-PHD/Project/cloudsim/modules/cloudsim-examples/src/main/java/org/cloudbus/cloudsim/project/dataset/cloudlet.txt";
 
     /** The vmlist. */
     private static List<Vm> vmlist;
@@ -44,8 +42,8 @@ public class QuestionTwo {
             Datacenter datacenter = createDatacenter("Datacenter_0", 500, 8);
 
             // ----------- Third Step: Creating a single broker, since these cloudlets are handle by single user/organization
-            broker = new CustomDatacenterBroker("Broker",
-                    "F:/Avishka-Sandeepa-PHD/Project/cloudsim/modules/cloudsim-examples/src/main/java/org/cloudbus/cloudsim/project/cloudlet.txt");
+            broker = new CustomDatacenterBrokerForDynamicVMProvision("Broker",
+                    filePath);
 
             //----------- Fourth Step: Create VMs and Cloudlets and send them to broker
             CloudSim.startSimulation();
@@ -53,7 +51,7 @@ public class QuestionTwo {
             //----------- Fifth Step: Retrieving created VM List
             // You can only get the vm list after starting the simulation.
             // If you re trying to access before initializing there will be an error
-            vmlist = CustomDatacenterBroker.getVmlist();
+            vmlist = CustomDatacenterBrokerForDynamicVMProvision.getVmlist();
 
             //----------- Final step: Print results when simulation is over
             List<CloudletDetails> newList = broker.getCloudletReceivedList();
@@ -148,6 +146,7 @@ public class QuestionTwo {
         CloudletDetails cloudlet;
         Map<String, Double> runningVmNames = new HashMap<>();
         Map<Integer, Double> vmExecutionTimes = new HashMap<>();
+        Map<Integer, Double> vmCostTimes = new HashMap<>();
         Map<String, Double> totalCostPerVm = new HashMap<>();
 
 
@@ -179,6 +178,7 @@ public class QuestionTwo {
             int vmId = cloudlet.getGuestId();
             double executionTime = cloudlet.getExecFinishTime() - cloudlet.getExecStartTime();
             vmExecutionTimes.merge(vmId, executionTime, Double::sum);
+            vmCostTimes.merge(vmId, cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0), Double::sum);
             String foundInstanceName = findInstanceNameByVmId(vmId);
             runningVmNames.merge(foundInstanceName, executionTime, Double::sum);
             totalCostPerVm.merge(foundInstanceName, cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0), Double::sum);
@@ -205,29 +205,63 @@ public class QuestionTwo {
         Log.println("No of VMs --> " + (!vmlist.isEmpty() ? vmlist.size() : 0) + " | Total cost for VMs --> $ " + dft1.format(totalCost));
         Log.println();
 
-        Log.println("Total No of cloudlets completed : " + totalCompleted + " out of " + CustomDatacenterBroker.getTotalCloudletRead());
+        Log.println("Total No of cloudlets completed : " + totalCompleted + " out of " + CustomDatacenterBrokerForDynamicVMProvision.getTotalCloudletRead());
         Log.println("========== VM ==========");
         Log.println("VM Name" + indent + indent + indent + "Number of Instance" + indent + indent + "Total Execution Time" + indent + indent + indent + "Total Cost ($)");
         for (Map.Entry<String, Double> vm : runningVmNames.entrySet()) {
             Log.println(vm.getKey() +
-                    indent + indent + indent + indent + (VmProvisioningStrategy.getNumberOfEachInstance().get(vm.getKey())+1) +
+                    indent + indent + indent + indent + (DynamicVMProvisioningStrategy.getNumberOfEachInstance().get(vm.getKey())+1) +
                     indent + indent + indent +  indent + indent + runningVmNames.get(vm.getKey()) +
                     indent + indent + indent +  indent + indent + dft1.format(totalCostPerVm.get(vm.getKey())));
         }
 
-//        Map<Integer, Double> sortedvmExecutionTimes = new TreeMap<>(vmExecutionTimes);
+        Map<Integer, Double> sortedvmExecutionTimes = new TreeMap<>(vmExecutionTimes);
 //        Log.println();
 //        Log.println();
 //        Log.println("======== VM Times ========");
-//        Log.println("VM ID" + indent + indent + "ExecutionTime");
+//        Log.println("VM ID" + indent + indent + "ExecutionTime" + indent + indent + "Cost per Instance");
 //        for (Map.Entry<Integer, Double> entry : sortedvmExecutionTimes.entrySet()) {
-//            Log.println(entry.getKey()+ indent + indent + entry.getValue());
+//            Log.println(entry.getKey() +
+//                    indent + indent + entry.getValue() +
+//                    indent + indent + indent + indent + indent + dft1.format(vmCostTimes.get(entry.getKey())));
 //        }
+
+        // ==================== testing only ====================================
+        Log.println();
+        Log.println();
+        for (Map.Entry<Integer, Double> entry : sortedvmExecutionTimes.entrySet()) {
+            Log.print(entry.getKey() + ", ");
+        }
+
+        Log.println();
+        for (Map.Entry<Integer, Double> entry : sortedvmExecutionTimes.entrySet()) {
+            Log.print(entry.getValue() + ", ");
+        }
+
+        Log.println();
+        for (Map.Entry<Integer, Double> entry : sortedvmExecutionTimes.entrySet()) {
+            Log.print(dft1.format(vmCostTimes.get(entry.getKey())) + ", ");
+        }
+        // ==========================================================================
+
+
+
+        Log.println();
+        Log.println();
+        Log.println("======== VM Instance Name to VMID mapping ========");
+        for (Map.Entry<String, Map<Integer, Vm>> runingVms : DynamicVMProvisioningStrategy.getRunningVms().entrySet()) {
+            Log.print("VM Instance Name : " + runingVms.getKey() + " ---> ");
+            for (Map.Entry<Integer, Vm> entry : runingVms.getValue().entrySet()) {
+                Log.print(entry.getKey() + ", ");
+            }
+            Log.println();
+        }
+
 
     }
 
     private static String findInstanceNameByVmId(int vmId) {
-        for (Map.Entry<String, Map<Integer, Vm>> outerEntry : VmProvisioningStrategy.getRunningVms().entrySet()) {
+        for (Map.Entry<String, Map<Integer, Vm>> outerEntry : DynamicVMProvisioningStrategy.getRunningVms().entrySet()) {
             for (Map.Entry<Integer, Vm> innerEntry : outerEntry.getValue().entrySet()) {
                 if (innerEntry.getKey() == vmId) {
                     return outerEntry.getKey();

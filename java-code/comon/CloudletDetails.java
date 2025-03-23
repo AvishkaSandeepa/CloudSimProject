@@ -1,9 +1,7 @@
-package org.cloudbus.cloudsim.project;
+package org.cloudbus.cloudsim.project.comon;
 
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.UtilizationModel;
-
-import java.util.List;
 
 public class CloudletDetails extends Cloudlet {
     private final double submissionTime;

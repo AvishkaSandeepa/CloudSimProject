@@ -1,4 +1,4 @@
-package org.cloudbus.cloudsim.project;
+package org.cloudbus.cloudsim.project.dynamicvmprovisioning;
 
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudActionTags;
@@ -6,13 +6,14 @@ import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.GuestEntity;
 import org.cloudbus.cloudsim.core.SimEvent;
 import org.cloudbus.cloudsim.lists.VmList;
+import org.cloudbus.cloudsim.project.comon.CloudletDetails;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 
-public class CustomDatacenterBroker extends DatacenterBroker {
+public class CustomDatacenterBrokerForDynamicVMProvision extends DatacenterBroker {
 
     private static List<Vm> vmlist;
     private static int totalCloudletRead = 0;
@@ -22,9 +23,9 @@ public class CustomDatacenterBroker extends DatacenterBroker {
      * Next guest to which send the cloudlet
      */
     private int guestIndex = 0;
-    private String workloadFilePath;
     private final Map<Integer, Queue<CloudletDetails>> vmTaskQueues = new HashMap<>(); // VM ID -> Task Queue
     private final Map<Integer, Integer> vmCoreUsage = new HashMap<>(); // VM ID -> Core Usage
+
 
     /**
      * Created a new CustomDatacenterBroker object.
@@ -34,7 +35,7 @@ public class CustomDatacenterBroker extends DatacenterBroker {
      * @pre name != null
      * @post $none
      */
-    public CustomDatacenterBroker(String name, String cloudletFilePath) throws Exception {
+    public CustomDatacenterBrokerForDynamicVMProvision(String name, String cloudletFilePath) throws Exception {
         super(name);
         this.cloudletFilePath = cloudletFilePath;
         readWorkloadFile(super.getId(), cloudletFilePath);
@@ -85,14 +86,10 @@ public class CustomDatacenterBroker extends DatacenterBroker {
         cloudletDetailsList = cloudletList;
     }
 
-    public List<CloudletDetails> getCloudletDetailsList() {
-        return cloudletDetailsList;
-    }
-
     @Override
     public void startEntity() {
         super.startEntity();
-        vmlist = VmProvisioningStrategy.provisionVms(getCloudletList(), getId());
+        vmlist = DynamicVMProvisioningStrategy.provisionVms(getCloudletList(), getId());
         submitGuestList(vmlist);
     }
 
@@ -132,6 +129,7 @@ public class CustomDatacenterBroker extends DatacenterBroker {
             vmTaskQueues.computeIfAbsent(vm.getId(), k -> new LinkedList<>());
             vmCoreUsage.putIfAbsent(vm.getId(), 0);
 
+            // In this scheduling algorithm, cloudlets are assigned on given submission time. Time-sharing scheduling is not working here
             if (vmCoreUsage.get(vm.getId()) < vm.getNumberOfPes()) {
                 double currentTime = CloudSim.clock();
                 double delay = cloudlet.getCloudletSubmissionTime() - currentTime;
@@ -142,7 +140,7 @@ public class CustomDatacenterBroker extends DatacenterBroker {
                     guestIndex = (guestIndex + 1) % getGuestsCreatedList().size();
                     getCloudletSubmittedList().add(cloudlet);
                     successfullySubmitted.add(cloudlet);
-                    vmCoreUsage.put(vm.getId(), vmCoreUsage.get(vm.getId()) + 1);
+                    vmCoreUsage.put(vm.getId(), vmCoreUsage.get(vm.getId()) + cloudlet.getNumberOfPes());
                 } else {
                     System.err.println("Task cannot be executed. current simulation time passes the task submission time. cloudletID : " + cloudlet.getCloudletId());
                 }

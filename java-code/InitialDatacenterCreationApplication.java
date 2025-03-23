@@ -20,7 +20,7 @@ import java.util.List;
  * b. 65 GB of RAM
  * c. 10 TB of storage
  */
-public class QuestionOne {
+public class InitialDatacenterCreationApplication {
     /**
      * Define these variables as static variables due to the easy access from main method all across the class
      * If there are multiple brokers, we should avoid using static as it can be override the variables, since it will be used across multiple entities
