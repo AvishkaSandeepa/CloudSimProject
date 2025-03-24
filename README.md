@@ -18,7 +18,7 @@ This repository stores the Java files for a given CloudSim assignment. CLOUDs LA
 
 ### +++++++++++++++++++++ Result Comparison +++++++++++++++++++++
 
-To understand VM usage, I present graphs of cost and execution time per VM instance. (*consider all running VMs for these graphs*). I used google colab to run my [Python notebook file](https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/python-code/cloudsim_histogram.ipynb) to get the following results.
+To understand VM usage, I present graphs of cost and execution time per VM instance. (*consider all running VMs for these graphs*). I used google colab to run my [Python notebook file](https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/cloudsim_histogram.ipynb) to get the following results.
 
 
 
