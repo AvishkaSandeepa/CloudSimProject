@@ -1,6 +1,8 @@
 package com.jobmanagement.shared;
 
-public class Job {
+import java.io.Serializable;
+
+public class Job implements Serializable {
     private final String id;
     private final String command;
     private Status jobStatus;
@@ -28,6 +30,6 @@ public class Job {
     }
 
     public enum Status {
-        PENDING, RUNNING, COMPLETED, FAILED, CANCELLED
+        PENDING, RUNNING, COMPLETED, FAILED, CANCELLED, UNKNOWN
     }
 }

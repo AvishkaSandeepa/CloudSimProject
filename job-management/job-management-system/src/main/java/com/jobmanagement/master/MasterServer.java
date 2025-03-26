@@ -8,6 +8,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -16,10 +18,22 @@ public class MasterServer {
     private static final String WORKER_PASSWORD = "master@123";
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private boolean running = true;
+    private final WorkerManager workerManager;
+    private final JobScheduler jobScheduler;
+    private final HealthMonitor healthMonitor;
+
+    public MasterServer() {
+        this.workerManager = new WorkerManager();
+        this.jobScheduler = new JobScheduler(workerManager);
+        this.healthMonitor = new HealthMonitor(workerManager);
+    }
 
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Master server started on port " + PORT);
+
+            new Thread(jobScheduler).start(); // start execution of the jobScheduling in separate thread
+            new Thread(healthMonitor).start();
 
             while (running) {
                 Socket clientSocket = serverSocket.accept();
@@ -50,26 +64,48 @@ public class MasterServer {
                     case "REGISTER_WORKER":
                         handleWorkerRegistration(in, out);
                         break;
-//                    case "SUBMIT_JOB":
-//                        Job job = (Job) in.readObject();
-//                        jobScheduler.addJob(job);
-//                        out.writeObject("ACCEPTED");
-//                        break;
-//                    case "JOB_STATUS":
-//                        String jobId = (String) in.readObject();
-//                        WorkerNode worker = workerManager.getWorkerForJob(jobId);
-//                        out.writeObject(worker != null ? worker.getJobStatus(jobId) : "UNKNOWN");
-//                        break;
-//                    case "CANCEL_JOB":
-//                        String cancelJobId = (String) in.readObject();
-//                        out.writeObject(jobScheduler.cancelJob(cancelJobId) ? "CANCELED" : "FAILED");
-//                        break;
-//                    case "LIST_WORKERS":
-//                        out.writeObject(workerManager.getWorkerInfo());
-//                        break;
-                    case "HEALTH_CHECK":
-                        out.writeObject("OK");
+                    case "SUBMIT_JOB":
+                        Job job = (Job) in.readObject();
+                        handleJobSubmission(job, out);
                         break;
+                    case "JOB_FAILED":
+                        String failedJobPwd = (String) in.readObject();
+                        if (WORKER_PASSWORD.equals(failedJobPwd)) {
+                            Job failedJob = (Job) in.readObject();
+                            workerManager.removeFailedJobs(failedJob.getId());
+                            System.out.println("Job failed ... re join the queue : " + failedJob.getId() + "   " + failedJob.getCommand());
+                            jobScheduler.addJob(failedJob);
+                            out.writeObject("ACK");
+                        } else {
+                            out.writeObject("AUTH_FAILED");
+                        }
+                        break;
+                    case "JOB_COMPLETE":
+                        String completeJobPwd = (String) in.readObject();
+                        if (WORKER_PASSWORD.equals(completeJobPwd)) {
+                            Job completeJob = (Job) in.readObject();
+                            workerManager.updateStatusOfCompleteJobInJObCache(completeJob.getId());
+                            System.out.println("Successfully complete the job : " + completeJob.getId() + " : " + completeJob.getCommand() + " by worker at port : " + workerManager.getWorkPort(completeJob.getId()));
+                            out.writeObject("ACK");
+                        } else {
+                            out.writeObject("AUTH_FAILED");
+                        }
+                        break;
+                    case "JOB_STATUS":
+                        String jobId = (String) in.readObject();
+                        WorkerNode worker = workerManager.getWorkNodeOfRunningJob(jobId);
+                        out.writeObject(worker != null ? worker.getJobStatus(jobId) : "UNKNOWN");
+                        break;
+                    case "CANCEL_JOB":
+                        String cancelJobId = (String) in.readObject();
+                        out.writeObject(jobScheduler.cancelJob(cancelJobId) ? "CANCELED" : "FAILED");
+                        break;
+                    case "LIST_WORKERS":
+                        out.writeObject(workerManager.getWorkerInfo());
+                        break;
+//                    case "HEALTH_CHECK":
+//                        out.writeObject("OK");
+//                        break;
                     default:
                         out.writeObject("UNKNOWN_COMMAND");
                 }
@@ -86,12 +122,21 @@ public class MasterServer {
 
             if (WORKER_PASSWORD.equals(receivedPassword)) {
                 WorkerNode workerNode = new WorkerNode(workerAddress, workerPort, receivedPassword);
-                WorkerManager.registerNewWorker(workerNode);
+                workerManager.registerNewWorker(workerNode);
                 out.writeObject("REGISTERED");
             } else {
                 out.writeObject("AUTH_FAIL");
             }
 
+        }
+
+        private void handleJobSubmission(Job job, ObjectOutputStream out) throws IOException {
+            try {
+                jobScheduler.addJob(job);
+                out.writeObject("ACCEPTED");
+            } catch (IOException e) {
+                out.writeObject("REJECTED");
+            }
         }
     }
 
