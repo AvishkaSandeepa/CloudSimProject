@@ -3,10 +3,12 @@ package com.jobmanagement.master;
 
 import com.jobmanagement.shared.Job;
 
+import java.util.*;
 import java.util.concurrent.*;
 
 public class JobScheduler implements Runnable {
     private final BlockingQueue<Job> jobQueue = new LinkedBlockingQueue<>();
+    private final Queue<Job> jobQueueCache = new ConcurrentLinkedQueue<>();
     private final WorkerManager workerManager;
     private volatile boolean running = true;
 
@@ -16,7 +18,18 @@ public class JobScheduler implements Runnable {
 
     public void addJob(Job job) {
         jobQueue.add(job);
+        jobQueueCache.add(job); // Keep recording of all jobs executed
         System.out.println("Added job to queue: " + job.getId());
+    }
+
+    public void addCorruptedJobs(List<String> jobIds) {
+        Set<String> jobIdSet = new HashSet<>(jobIds);
+        for (Job job : jobQueueCache) {
+            if (jobIdSet.contains(job.getId())) {
+                jobQueue.add(job);
+                System.out.println("Re-queue the job: " + job.getId() + " from corrupted worker");
+            }
+        }
     }
 
     private void scheduleJob(Job job) {

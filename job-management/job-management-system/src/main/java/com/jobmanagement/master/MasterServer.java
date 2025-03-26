@@ -25,7 +25,7 @@ public class MasterServer {
     public MasterServer() {
         this.workerManager = new WorkerManager();
         this.jobScheduler = new JobScheduler(workerManager);
-        this.healthMonitor = new HealthMonitor(workerManager);
+        this.healthMonitor = new HealthMonitor(workerManager, jobScheduler);
     }
 
     public void start() {

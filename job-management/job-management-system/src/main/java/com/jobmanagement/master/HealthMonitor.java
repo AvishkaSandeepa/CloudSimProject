@@ -7,9 +7,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class HealthMonitor implements Runnable{
     private final ConcurrentHashMap<Integer, Long> lastAvailableTime = new ConcurrentHashMap<>();
     private final WorkerManager workerManager;
+    private final JobScheduler jobScheduler;
 
-    public HealthMonitor(WorkerManager workerManager) {
+    public HealthMonitor(WorkerManager workerManager, JobScheduler jobScheduler) {
         this.workerManager = workerManager;
+        this.jobScheduler = jobScheduler;
     }
 
     public ConcurrentHashMap<Integer, Long> getLastAvailableTime() {
@@ -17,12 +19,13 @@ public class HealthMonitor implements Runnable{
     }
 
     private void updateWorkerNodeStatus (WorkerNode workerNode) {
-        for (ConcurrentHashMap.Entry<String, String> entry : workerNode.getJobStatusCache().entrySet()) {
-            if (Objects.equals(entry.getValue(), "RUNNING")) {
-                continue;
-            } else {
-                workerNode.setStatus("ACTIVE");
-            }
+        boolean allRunning = workerNode.getJobStatusCache()
+                .values()
+                .stream()
+                .allMatch(status -> "RUNNING".equals(status));
+
+        if (!allRunning) {
+            workerNode.setStatus("ACTIVE");
         }
     }
 
@@ -44,6 +47,8 @@ public class HealthMonitor implements Runnable{
                         if (System.currentTimeMillis() - lastAvailable > 10000) {
                             System.out.println("No callback from given worker at port : " + workerNode.getPort());
                             workerNode.setStatus("DEAD");
+                            List<String> waitingJobs = workerManager.rescheduleJobsForAvailableWorkers(workerNode);
+                            jobScheduler.addCorruptedJobs(waitingJobs);
                         }
                     }
                 }

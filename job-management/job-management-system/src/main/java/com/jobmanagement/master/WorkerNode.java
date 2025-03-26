@@ -20,7 +20,7 @@ public class WorkerNode {
         this.address = address;
         this.port = port;
         this.password = password;
-        this.status = "ACTIVE";
+        this.status = "REGISTERED";
     }
 
     public String getAddress() {
