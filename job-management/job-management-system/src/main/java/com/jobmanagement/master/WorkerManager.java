@@ -86,7 +86,7 @@ public class WorkerManager {
                     canceledJobs++;
                 }
             }
-            
+
             String status = worker.getStatus();
             if (status.equals("DEAD")) runningJobs = 0;
 

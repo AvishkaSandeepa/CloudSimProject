@@ -7,7 +7,8 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class JobScheduler implements Runnable {
-    private final BlockingQueue<Job> jobQueue = new LinkedBlockingQueue<>();
+    private final PriorityBlockingQueue<Job> jobQueue =
+            new PriorityBlockingQueue<>(100, Comparator.comparing(Job::getDeadline));
     private final Queue<Job> jobQueueCache = new ConcurrentLinkedQueue<>();
     private final WorkerManager workerManager;
     private volatile boolean running = true;
@@ -17,7 +18,7 @@ public class JobScheduler implements Runnable {
     }
 
     public void addJob(Job job) {
-        jobQueue.add(job);
+        jobQueue.put(job);
         jobQueueCache.add(job); // Keep recording of all jobs executed
         System.out.println("Added job to queue: " + job.getId());
     }
@@ -26,7 +27,7 @@ public class JobScheduler implements Runnable {
         Set<String> jobIdSet = new HashSet<>(jobIds);
         for (Job job : jobQueueCache) {
             if (jobIdSet.contains(job.getId())) {
-                jobQueue.add(job);
+                jobQueue.put(job);
                 System.out.println("Re-queue the job: " + job.getId() + " from corrupted worker");
             }
         }
@@ -40,11 +41,11 @@ public class JobScheduler implements Runnable {
                 System.out.println("Scheduled job " + job.getId() + " on worker " + worker.getAddress() + worker.getPort());
             } else {
                 System.out.println("Failed to schedule job " + job.getId() + ", re-queuing");
-                jobQueue.add(job);
+                jobQueue.put(job);
             }
         } else {
             System.out.println("No available workers for job " + job.getId() + ", re-queuing");
-            jobQueue.add(job);
+            jobQueue.put(job);
         }
     }
 

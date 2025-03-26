@@ -4,6 +4,8 @@ import com.jobmanagement.shared.Job;
 
 import java.io.*;
 import java.net.Socket;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -118,12 +120,15 @@ public class MasterCLI {
 
     private static void jobSubmission(String[] parts) throws IOException, ClassNotFoundException {
         if (parts.length < 2) {
-            System.out.println("Usage: submit-job <command>");
+            System.out.println("Usage: submit-job <command> <deadline> <budget>");
             return;
         }
         String jobId = UUID.randomUUID().toString();
-        String command = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
-        Job job = new Job(jobId, command);
+        String command = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length - 2));
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+        LocalTime deadline = LocalTime.parse(parts[2], formatter);
+        double budget = Double.parseDouble(parts[3]);
+        Job job = new Job(jobId, command, deadline, budget);
 
         try (Socket socket = new Socket(MASTER_ADDRESS, MASTER_PORT);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
