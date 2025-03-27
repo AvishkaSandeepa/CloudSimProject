@@ -40,6 +40,9 @@ public class MasterCLI {
                         case "submit-job":
                             jobSubmission(parts);
                             break;
+                        case "submit-job-file":
+                            jobSubmissionFromFile(parts);
+                            break;
                         case "done":
                             doneBatch(parts);
                             break;
@@ -126,6 +129,35 @@ public class MasterCLI {
         }
     }
 
+    private static void jobSubmissionFromFile(String[] parts) throws IOException, ClassNotFoundException {
+        if (parts.length < 1) {
+            System.out.println("Usage: submit-job-file <file path>");
+            return;
+        }
+
+        try (Socket socket = new Socket(MASTER_ADDRESS, MASTER_PORT);
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+
+            String filePath = parts[1];
+            BufferedReader fileReader = new BufferedReader(new FileReader(filePath));
+            out.writeObject("SUBMIT_JOB_FILE");
+
+            // Read and send file line by line
+            String line;
+            while ((line = fileReader.readLine()) != null) {
+                out.writeObject(line);
+            }
+            out.writeObject("END_OF_FILE"); // Send termination marker
+
+            String response = (String) in.readObject();
+            System.out.println("File jobs submitted. Status: " + response);
+
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
     private static void jobSubmission(String[] parts) throws IOException, ClassNotFoundException {
         if (parts.length < 2) {
             System.out.println("Usage: submit-job <command> <deadline> <budget>");
@@ -172,6 +204,7 @@ public class MasterCLI {
     private static void printHelp() {
         System.out.println("Available commands:");
         System.out.println("  submit-job <command> <deadline> <budget>  - Submit a new job. Deadline should be in HH:mm:ss format");
+        System.out.println("  submit-job-file <address of a job file>");
         System.out.println("  done - Start scheduling and execution of initially submitted jobs");
         System.out.println("  job-status <jobId>    - Check job status");
         System.out.println("  cancel-job <jobId>    - Cancel a running job");

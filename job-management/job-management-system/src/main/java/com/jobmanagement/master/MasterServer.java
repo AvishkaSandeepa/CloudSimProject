@@ -8,9 +8,16 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -73,6 +80,15 @@ public class MasterServer {
                         break;
                     case "DONE_BATCH":
                         handleJobSubmission(out);
+                        break;
+                    case "SUBMIT_JOB_FILE":
+                        while (true) {
+                            String line = (String) in.readObject();
+                            if ("END_OF_FILE".equals(line)) break;
+                            Job jobFromFile = parseJobFromLine(line);
+                            fetchAllJobs(jobFromFile, out);
+                        }
+                        out.writeObject("FILE_JOBS_ACCEPTED");
                         break;
                     case "JOB_FAILED":
                         String failedJobPwd = (String) in.readObject();
@@ -159,6 +175,35 @@ public class MasterServer {
             } catch (IOException e) {
                 out.writeObject("REJECTED");
             }
+        }
+    }
+
+    public static Job parseJobFromLine(String line) throws IllegalArgumentException {
+        DateTimeFormatter TIME_FORMATTER =
+                DateTimeFormatter.ofPattern("HH:mm:ss");
+        // Split the line into components
+        String[] parts = line.split("\\s+", 3); // Split on whitespace, max 3 parts
+
+        if (parts.length < 3) {
+            throw new IllegalArgumentException(
+                    "Invalid job format. Expected: <command> <deadline(HH:mm:ss)> <budget>");
+        }
+
+        try {
+            String command = parts[0];
+            LocalTime deadline = LocalTime.parse(parts[1], TIME_FORMATTER);
+            double budget = Double.parseDouble(parts[2]);
+
+            String jobId = UUID.randomUUID().toString();
+
+            return new Job(jobId, command, deadline, budget);
+
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                    "Invalid deadline format. Expected HH:mm:ss", e);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    "Invalid budget format. Expected numeric value", e);
         }
     }
 
