@@ -16,6 +16,8 @@ public class MasterCLI {
 
     public static void main(String[] args) {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
+            System.out.println("Welcome to the job scheduling CLI. To get all available commands, please type 'help' and press enter");
+            System.out.println("----------------------------------------------------------------------------------------------------");
 
             while (true) {
                 System.out.println("master > ");
@@ -38,6 +40,9 @@ public class MasterCLI {
                         case "submit-job":
                             jobSubmission(parts);
                             break;
+                        case "done":
+                            doneBatch(parts);
+                            break;
                         case "job-status":
                             getJobStatus(parts);
                             break;
@@ -46,6 +51,9 @@ public class MasterCLI {
                             break;
                         case "list-workers":
                             getListOfWorkers(parts);
+                            break;
+                        case "help":
+                            printHelp();
                             break;
                         default:
                             System.out.println("Invalid command .... ");
@@ -141,5 +149,33 @@ public class MasterCLI {
             System.out.println("Job submitted. ID: " + jobId + ", Status: " + response);
 
         }
+    }
+
+    private static void doneBatch(String[] parts) throws IOException, ClassNotFoundException {
+        if (parts.length < 1) {
+            System.out.println("Usage: done");
+            return;
+        }
+
+        try (Socket socket = new Socket(MASTER_ADDRESS, MASTER_PORT);
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+
+            out.writeObject("DONE_BATCH");
+
+            String response = (String) in.readObject();
+            System.out.println("Submit for batch process. STATUS :  " + response);
+
+        }
+    }
+
+    private static void printHelp() {
+        System.out.println("Available commands:");
+        System.out.println("  submit-job <command> <deadline> <budget>  - Submit a new job. Deadline should be in HH:mm:ss format");
+        System.out.println("  done - Start scheduling and execution of initially submitted jobs");
+        System.out.println("  job-status <jobId>    - Check job status");
+        System.out.println("  cancel-job <jobId>    - Cancel a running job");
+        System.out.println("  list-workers      - List all registered workers");
+        System.out.println("  exit              - Exit the CLI");
     }
 }

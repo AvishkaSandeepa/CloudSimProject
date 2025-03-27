@@ -12,14 +12,24 @@ public class JobScheduler implements Runnable {
     private final Queue<Job> jobQueueCache = new ConcurrentLinkedQueue<>();
     private final WorkerManager workerManager;
     private volatile boolean running = true;
+    private final CountDownLatch batchReadySignal = new CountDownLatch(1);
 
     public JobScheduler(WorkerManager workerManager) {
         this.workerManager = workerManager;
     }
 
+    // ==== Batch Insertion ====
+    public void addJobsBatch(List<Job> jobs) {
+        jobQueue.addAll(jobs); // Bulk insert (non-blocking)
+        jobQueueCache.addAll(jobs); // Track all jobs
+        System.out.println("Added " + jobs.size() + " jobs to queue");
+        batchReadySignal.countDown(); // Signal workers to start (if waiting)
+    }
+
+    // ==== Single Job Insertion (backward-compatible) ====
     public void addJob(Job job) {
-        jobQueue.put(job);
-        jobQueueCache.add(job); // Keep recording of all jobs executed
+        jobQueue.put(job); // Blocking insert (if queue is full)
+        jobQueueCache.add(job);
         System.out.println("Added job to queue: " + job.getId());
     }
 
@@ -71,6 +81,13 @@ public class JobScheduler implements Runnable {
 
     @Override
     public void run() {
+        try {
+            batchReadySignal.await(); // Wait until batch is loaded (optional)
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+
         while (running) {
             try {
                 Job job = jobQueue.take();

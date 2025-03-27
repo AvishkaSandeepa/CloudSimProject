@@ -8,6 +8,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -21,6 +23,7 @@ public class MasterServer {
     private final WorkerManager workerManager;
     private final JobScheduler jobScheduler;
     private final HealthMonitor healthMonitor;
+    List<Job> jobs = new ArrayList<>();
 
     public MasterServer() {
         this.workerManager = new WorkerManager();
@@ -66,7 +69,10 @@ public class MasterServer {
                         break;
                     case "SUBMIT_JOB":
                         Job job = (Job) in.readObject();
-                        handleJobSubmission(job, out);
+                        fetchAllJobs(job, out);
+                        break;
+                    case "DONE_BATCH":
+                        handleJobSubmission(out);
                         break;
                     case "JOB_FAILED":
                         String failedJobPwd = (String) in.readObject();
@@ -130,10 +136,25 @@ public class MasterServer {
 
         }
 
-        private void handleJobSubmission(Job job, ObjectOutputStream out) throws IOException {
+        private void fetchAllJobs(Job job, ObjectOutputStream out) throws IOException {
             try {
-                jobScheduler.addJob(job);
+                System.out.println(job.getDeadline());
+                jobs.add(job);
                 out.writeObject("ACCEPTED");
+            } catch (IOException e) {
+                out.writeObject("REJECTED");
+            }
+        }
+
+        private void handleJobSubmission(ObjectOutputStream out) throws IOException {
+            try {
+                if (!jobs.isEmpty()) {
+                    jobScheduler.addJobsBatch(jobs);
+                    jobs.clear();
+                    out.writeObject("ACCEPTED");
+                } else {
+                    out.writeObject("NO_JOB_FOR_BATCH_PROCESS");
+                }
             } catch (IOException e) {
                 out.writeObject("REJECTED");
             }
