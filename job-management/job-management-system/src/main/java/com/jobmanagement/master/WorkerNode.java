@@ -14,13 +14,18 @@ public class WorkerNode {
     private final String password;
     private final ConcurrentHashMap<String, String> jobStatusCache = new ConcurrentHashMap<>();
     private String status;
+    private double budget;
 
-
-    public WorkerNode(String address, int port, String password) {
+    public WorkerNode(String address, int port, String password, double budget) {
         this.address = address;
         this.port = port;
         this.password = password;
+        this.budget = budget;
         this.status = "REGISTERED";
+    }
+
+    public double getBudget() {
+        return budget;
     }
 
     public String getAddress() {
@@ -74,6 +79,7 @@ public class WorkerNode {
 
             String response = (String) in.readObject();
             if ("ACCEPTED".equals(response)) {
+                budget -= job.getBudget();
                 jobStatusCache.put(job.getId(), "RUNNING");
                 return true;
             }

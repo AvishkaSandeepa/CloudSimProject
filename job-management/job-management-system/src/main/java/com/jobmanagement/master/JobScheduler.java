@@ -44,14 +44,20 @@ public class JobScheduler implements Runnable {
     }
 
     private void scheduleJob(Job job) {
-        WorkerNode worker = workerManager.getNextAvailableWorker();
+        WorkerNode worker = workerManager.getNextAvailableWorker(job);
         if (worker != null) {
-            workerManager.assignJob(job.getId(), worker);
-            if (worker.executeJob(job)) {
-                System.out.println("Scheduled job " + job.getId() + " on worker " + worker.getAddress() + worker.getPort());
-            } else {
-                System.out.println("Failed to schedule job " + job.getId() + ", re-queuing");
+            if (Objects.isNull(worker.getAddress()) && worker.getBudget() == -1.0) {
+                System.err.println("All workers are out of budget. Job is added to queue ...... ");
+                System.err.println("Waiting for another worker to add ... ");
                 jobQueue.put(job);
+            } else {
+                workerManager.assignJob(job.getId(), worker);
+                if (worker.executeJob(job)) {
+                    System.out.println("Scheduled job " + job.getId() + " on worker " + worker.getAddress() + worker.getPort());
+                } else {
+                    System.out.println("Failed to schedule job " + job.getId() + ", re-queuing");
+                    jobQueue.put(job);
+                }
             }
         } else {
             System.out.println("No available workers for job " + job.getId() + ", re-queuing");

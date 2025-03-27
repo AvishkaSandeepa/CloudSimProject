@@ -15,13 +15,15 @@ public class WorkerServer {
 
     private final int port;
     private final String password;
+    private final double initialBudget;
     private final JobExecutor jobExecutor;
     private final ConcurrentHashMap<String, Thread> runningJobs = new ConcurrentHashMap<>();
     private boolean running = true;
 
-    public WorkerServer(int port, String password) {
+    public WorkerServer(int port, String password, double initialBudget) {
         this.port = port;
         this.password = password;
+        this.initialBudget = initialBudget;
         this.jobExecutor = new JobExecutor();
     }
 
@@ -53,6 +55,7 @@ public class WorkerServer {
             out.writeObject("localhost");
             out.writeObject(port);
             out.writeObject(password);
+            out.writeObject(initialBudget);
 
             String response = (String) in.readObject();
             if (!"REGISTERED".equals(response)) {
@@ -201,14 +204,15 @@ public class WorkerServer {
 
     public static void main(String[] args) {
         if (args.length < 2) {
-            System.err.println("Usage: WorkerServer <port> <password>");
+            System.err.println("Usage: WorkerServer <port> <password> <budget>");
             System.exit(1);
         }
 
         int port = Integer.parseInt(args[0]);
         String password = args[1];
+        double initialBudget = Double.parseDouble(args[2]);
 
-        WorkerServer server = new WorkerServer(port, password);
+        WorkerServer server = new WorkerServer(port, password, initialBudget);
         server.start();
 //        Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
     }

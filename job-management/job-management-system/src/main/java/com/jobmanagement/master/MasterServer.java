@@ -125,9 +125,10 @@ public class MasterServer {
             String workerAddress = (String) in.readObject();
             int workerPort = (int) in.readObject();
             String receivedPassword = (String) in.readObject();
+            double initialBudget = (double) in.readObject();
 
             if (WORKER_PASSWORD.equals(receivedPassword)) {
-                WorkerNode workerNode = new WorkerNode(workerAddress, workerPort, receivedPassword);
+                WorkerNode workerNode = new WorkerNode(workerAddress, workerPort, receivedPassword, initialBudget);
                 workerManager.registerNewWorker(workerNode);
                 out.writeObject("REGISTERED");
             } else {

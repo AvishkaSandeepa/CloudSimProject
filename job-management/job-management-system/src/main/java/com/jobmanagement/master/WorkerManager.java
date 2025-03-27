@@ -1,5 +1,7 @@
 package com.jobmanagement.master;
 
+import com.jobmanagement.shared.Job;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,10 +22,15 @@ public class WorkerManager {
         System.out.println("Registered worker: " + workerNode.getAddress() + ":" + workerNode.getPort());
     }
 
-    public synchronized WorkerNode getNextAvailableWorker() {
+    public synchronized WorkerNode getNextAvailableWorker(Job job) {
         if (workers.isEmpty()) return null;
-        currentIndex = (currentIndex + 1) % workers.size(); // round-robin algorithm for worker selection
-        return workers.get(currentIndex);
+        List<WorkerNode> eligibleWorkers = workers.stream()
+                .filter(worker -> worker.getBudget() >= job.getBudget())
+                .toList();
+        if (eligibleWorkers.isEmpty()) return new WorkerNode(null, 0, null, -1.0);
+        currentIndex = (currentIndex + 1) % eligibleWorkers.size(); // round-robin algorithm for worker selection
+        System.out.println("current available budget for worker : " + eligibleWorkers.get(currentIndex).getBudget());
+        return eligibleWorkers.get(currentIndex);
     }
 
     public synchronized void assignJob(String jobId, WorkerNode workerNode) {
