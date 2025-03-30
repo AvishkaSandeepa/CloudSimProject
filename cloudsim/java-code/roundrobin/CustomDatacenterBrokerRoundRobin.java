@@ -4,6 +4,7 @@ import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudActionTags;
 import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.GuestEntity;
+import org.cloudbus.cloudsim.core.SimEvent;
 import org.cloudbus.cloudsim.lists.VmList;
 import org.cloudbus.cloudsim.projectone.comon.CloudletDetails;
 
@@ -140,24 +141,80 @@ public class CustomDatacenterBrokerRoundRobin extends DatacenterBroker {
                         " #", cloudlet.getCloudletId(), " to " + vm.getClassName() + " #", vm.getId());
             }
 
-            double currentTime = CloudSim.clock();
-            double delay = cloudlet.getCloudletSubmissionTime() - currentTime;
-            if (delay > 0) {
-                cloudlet.setGuestId(vm.getId());
-                send(getVmsToDatacentersMap().get(vm.getId()), delay, CloudActionTags.CLOUDLET_SUBMIT, cloudlet);
-                cloudletsSubmitted++;
-                lastVmIndex++;
-                guestIndex = (guestIndex + 1) % numCreatedVms; // Round-robin increment
-                getCloudletSubmittedList().add(cloudlet);
-                successfullySubmitted.add(cloudlet);
-            } else {
-                System.err.println("Task cannot be executed. current simulation time passes the task submission time. cloudletID : " + cloudlet.getCloudletId());
+            vmTaskQueues.computeIfAbsent(vm.getId(), k -> new LinkedList<>());
+            vmCoreUsage.putIfAbsent(vm.getId(), 0);
+
+            if (vmCoreUsage.get(vm.getId()) < vm.getNumberOfPes()) {
+                double currentTime = CloudSim.clock();
+                double delay = cloudlet.getCloudletSubmissionTime() - currentTime;
+                if (delay > 0) {
+                    cloudlet.setGuestId(vm.getId());
+                    send(getVmsToDatacentersMap().get(vm.getId()), delay, CloudActionTags.CLOUDLET_SUBMIT, cloudlet);
+                    cloudletsSubmitted++;
+                    lastVmIndex++;
+                    guestIndex = (guestIndex + 1) % numCreatedVms; // Round-robin increment
+                    getCloudletSubmittedList().add(cloudlet);
+                    successfullySubmitted.add(cloudlet);
+                } else {
+                    System.err.println("Task cannot be executed. current simulation time passes the task submission time. cloudletID : " + cloudlet.getCloudletId());
+                }
+            }else {
+                vmTaskQueues.get(vm.getId()).add(cloudlet);
             }
+
 
         }
 
         // remove submitted cloudlets from waiting list
         getCloudletList().removeAll(successfullySubmitted);
+    }
+
+    @Override
+    protected void processCloudletReturn(SimEvent ev) {
+        CloudletDetails cloudlet = (CloudletDetails) ev.getData();
+        super.processCloudletReturn(ev);
+
+        vmCoreUsage.put(cloudlet.getGuestId(), vmCoreUsage.get(cloudlet.getGuestId()) - 1);
+        dispatchNextTask(cloudlet.getGuestId());
+    }
+
+    private void dispatchNextTask(int vmId) {
+        if (!vmTaskQueues.get(vmId).isEmpty()) {
+            Queue<CloudletDetails> cloudletDetails = vmTaskQueues.get(vmId);
+            int cloudletId = -1;
+            CloudletDetails nextCloudlet = cloudletDetails.poll();
+            if (Objects.nonNull(nextCloudlet)) {
+                cloudletId = nextCloudlet.getCloudletId();
+            }
+            GuestEntity vm = VmList.getById(getGuestsCreatedList(), vmId);
+            if (vm == null) {
+                vm = VmList.getById(getGuestList(), vmId); // check if exists in the submitted list
+
+                if (!Log.isDisabled()) {
+                    if (vm != null) {
+                        Log.printlnConcat(CloudSim.clock(), ": ", getName(), ": Postponing execution of cloudlet ", cloudletId, ": bount ", vm.getClassName(), " #", vm.getId(), " not available");
+                    } else {
+                        Log.printlnConcat(CloudSim.clock(), ": ", getName(), ": Postponing execution of cloudlet ", cloudletId, ": bount guest entity of id ", vmId, " doesn't exist");
+                    }
+                }
+            } else {
+                if ((vmCoreUsage.get(vm.getId()) < vm.getNumberOfPes()) && Objects.nonNull(nextCloudlet)) {
+                    double currentTime = CloudSim.clock();
+                    double delay = nextCloudlet.getCloudletSubmissionTime() - currentTime;
+                    if (delay > 0) {
+                        send(getVmsToDatacentersMap().get(vm.getId()), delay, CloudActionTags.CLOUDLET_SUBMIT, nextCloudlet);
+                        cloudletsSubmitted++;
+                        guestIndex = (guestIndex + 1) % getGuestsCreatedList().size();
+                        getCloudletSubmittedList().add(nextCloudlet);
+                        vmCoreUsage.put(vm.getId(), vmCoreUsage.get(vm.getId()) + 1);
+                    } else {
+                        System.err.println("Task cannot be executed. current simulation time passes the task submission time. cloudletID : " + cloudletId);
+                    }
+                } else {
+                    vmTaskQueues.get(vm.getId()).add(nextCloudlet);
+                }
+            }
+        }
     }
 
 }
