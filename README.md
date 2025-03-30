@@ -26,20 +26,46 @@ To understand VM usage, I present graphs of cost and execution time per VM insta
 
 `Graphs`
 
-Execution Time vs VM Instance
+### Deadline Aware Provisioning (DAP)
+
+Execution Time vs VM Instance - Deadline Aware Provisioning (DAP)
 
 
-<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/Time-vs-VMs.png" alt="Execution Time vs VM Instance" style="width:2000px;"/>
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/Dynamic-Time-vs-VMs.png" alt="Execution Time vs VM Instance" style="width:2000px;"/>
 
 
-Cost vs VM Instance
+Cost vs VM Instance - Deadline Aware Provisioning (DAP)
 
 
-<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/Cost-vs-VMs.png" alt="Cost vs VM Instance" style="width:2000px;"/>
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/Dynamic-Cost-vs-VMs.png" alt="Cost vs VM Instance" style="width:2000px;"/>
 
 
 *---------------------------------------------------------------------------------------------------------------------------------------------------------*
 
-Usage of each commercially available VM Instances (Time usage and Cost)
+Usage of each commercially available VM Instances (Time usage and Cost) - Deadline Aware Provisioning (DAP)
 
-<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/TotalTimeAndCost-vs-UsedInstance.png" alt="Usage of each commercially available VM Instances" style="width:2000px;"/>
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/Dynamic-TotalTimeAndCost-vs-UsedInstance.png" alt="Usage of each commercially available VM Instances" style="width:2000px;"/>
+
+
+
+
+### Fixed Round Robin (FRR)
+
+Execution Time vs VM Instance - Fixed Round Robin (FRR)
+
+
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/Fixed-Time-vs-VMs.png" alt="Execution Time vs VM Instance" style="width:2000px;"/>
+
+
+Cost vs VM Instance - Fixed Round Robin (FRR)
+
+
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/Fixed-Cost-vs-VMs.png" alt="Cost vs VM Instance" style="width:2000px;"/>
+
+
+*---------------------------------------------------------------------------------------------------------------------------------------------------------*
+
+Usage of each commercially available VM Instances (Time usage and Cost) - Fixed Round Robin (FRR)
+
+<img src="https://github.com/AvishkaSandeepa/CloudSimProject/blob/master/cloudsim/python-code/Images/Fixed-TotalTimeAndCost-vs-UsedInstance.png" alt="Usage of each commercially available VM Instances" style="width:2000px;"/>
+
