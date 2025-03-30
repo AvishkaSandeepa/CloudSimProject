@@ -1,14 +1,17 @@
-package org.cloudbus.cloudsim.project.roundrobin;
+package org.cloudbus.cloudsim.projectone.roundrobin;
 
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudSim;
-import org.cloudbus.cloudsim.project.comon.CloudletDetails;
-import org.cloudbus.cloudsim.project.dynamicvmprovisioning.DynamicVMProvisioningStrategy;
+import org.cloudbus.cloudsim.projectone.comon.CloudletDetails;
+import org.cloudbus.cloudsim.projectone.dynamicvmprovisioning.CustomDatacenter;
+import org.cloudbus.cloudsim.projectone.dynamicvmprovisioning.DynamicVMProvisioningStrategy;
 import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
 
 import java.text.DecimalFormat;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 
 /**
@@ -23,7 +26,7 @@ public class RoundRobinApplication {
      * If there are multiple brokers, we should avoid using static as it can be override the variables, since it will be used across multiple entities
      */
     public static CustomDatacenterBrokerRoundRobin broker;
-    private static final String filePath = "F:/Avishka-Sandeepa-PHD/Project/cloudsim/modules/cloudsim-examples/src/main/java/org/cloudbus/cloudsim/project/dataset/cloudlet.txt";
+    private static final String filePath = "F:\\Avishka-Sandeepa-PHD\\Project\\cloudsim\\modules\\cloudsim-examples\\src\\main\\java\\org\\cloudbus\\cloudsim\\projectone\\dataset\\cloudlets_updated.txt";
 
     /** The vmlist. */
     private static List<Vm> vmlist;
@@ -40,7 +43,7 @@ public class RoundRobinApplication {
             CloudSim.init(num_user, calendar, trace_flag);
 
             // ----------- Second Step: Creating a datacenter with 500 hosts (each has  cores)
-            Datacenter datacenter = createDatacenter("Datacenter_0", 500, 8);
+            CustomDatacenter datacenter = createDatacenter("Datacenter_0", 500, 8);
 
             // ----------- Third Step: Creating a single broker, since these cloudlets are handle by single user/organization
             broker = new CustomDatacenterBrokerRoundRobin("Broker", filePath);
@@ -59,7 +62,7 @@ public class RoundRobinApplication {
             //----------- Stop the simulation
             CloudSim.stopSimulation();
 
-            printCloudletList(newList);
+            printCloudletList(newList, datacenter.getVmStartTimes(), datacenter.getVmFinishTimes());
 
             Log.println("CloudSim questionOne is finished!");
 
@@ -76,7 +79,7 @@ public class RoundRobinApplication {
      * @param numberOfCores for the datacenter
      * @return Datacenter
      */
-    public static Datacenter createDatacenter(String name, int numberOfHosts, int numberOfCores) {
+    public static CustomDatacenter createDatacenter(String name, int numberOfHosts, int numberOfCores) {
         // Steps for HOST machine creation under given instructions
 
         // Initialize the list of host machines
@@ -126,9 +129,9 @@ public class RoundRobinApplication {
                 costPerStorage, costPerBw);
 
         // 6. Finally, we need to create a PowerDatacenter object.
-        Datacenter datacenter = null;
+        CustomDatacenter datacenter = null;
         try {
-            datacenter = new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList), storageList, 0);
+            datacenter = new CustomDatacenter(name, characteristics, new VmAllocationPolicySimple(hostList), storageList, 0);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -142,7 +145,7 @@ public class RoundRobinApplication {
      * Prints the Cloudlet objects
      * @param list  list of Cloudlets
      */
-    private static void printCloudletList(List<CloudletDetails> list) {
+    private static void printCloudletList(List<CloudletDetails> list, Map<Integer, Double> vmStartTime, Map<Integer, Double> vmEndTime) {
         CloudletDetails cloudlet;
         Map<String, Double> runningVmNames = new HashMap<>();
         Map<Integer, Double> vmExecutionTimes = new HashMap<>();
@@ -191,7 +194,8 @@ public class RoundRobinApplication {
                         indent + indent + indent + indent + dft.format(cloudlet.getActualCPUTime()) +
                         indent + indent + indent + dft.format(cloudlet.getExecStartTime()) +
                         indent + indent + indent + dft.format(cloudlet.getExecFinishTime()) +
-                        indent + indent + indent + indent + indent + dft1.format(cloudlet.getActualCPUTime() * (hourlyPrice/3600.0)));
+                        indent + indent + indent + indent + indent + dft1.format(cloudlet.getActualCPUTime() * (hourlyPrice/3600.0)) +
+                        indent + indent + indent + indent + indent + (cloudlet.getExecFinishTime() > cloudlet.getDeadline() ? "WASTED" : "GOOD"));
             }
         }
 
@@ -250,6 +254,33 @@ public class RoundRobinApplication {
             }
             Log.println();
         }
+
+
+        Log.println();
+        Log.println();
+        Log.println("++++++++++++++++++++++++++ IMPORTANT ++++++++++++++++++++++++");
+        Log.println();
+        Log.println("VMID" + indent + "Start Time" + indent + "End Time" + indent + "Price");
+        Double time = 0.0;
+        Double cost = 0.0;
+        List<Double> execTime = new ArrayList<>();
+        List<Double> price =  new ArrayList<>();
+        for (Map.Entry<Integer, Double> vmEntry : vmStartTime.entrySet()) {
+            Integer vmId = vmEntry.getKey();
+            Double startTime = vmEntry.getValue();
+            Double finishTime = (vmEndTime.containsKey(vmId) ? vmEndTime.get(vmId) : -1);
+
+            cost += (finishTime-startTime)*FixedVMSelectionForRoundRobin.getHourlyCostByVmId(vmId);
+            time += finishTime-startTime;
+            execTime.add(finishTime-startTime);
+            price.add((finishTime-startTime)*FixedVMSelectionForRoundRobin.getHourlyCostByVmId(vmId));
+            Log.println(vmId + indent + startTime + indent + finishTime + indent + ((finishTime-startTime)*FixedVMSelectionForRoundRobin.getHourlyCostByVmId(vmId)));
+        }
+        Log.println();
+        Log.println("Total exec time = " + time/3600 + "hours");
+
+        Log.println("Total Price = " + cost/1000 + " K $");
+
     }
 
 }

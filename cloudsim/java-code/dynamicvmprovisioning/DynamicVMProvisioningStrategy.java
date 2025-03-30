@@ -1,14 +1,18 @@
-package org.cloudbus.cloudsim.project.dynamicvmprovisioning;
+package org.cloudbus.cloudsim.projectone.dynamicvmprovisioning;
 
+import org.cloudbus.cloudsim.CloudletSchedulerSpaceShared;
 import org.cloudbus.cloudsim.CloudletSchedulerTimeShared;
 import org.cloudbus.cloudsim.Vm;
-import org.cloudbus.cloudsim.project.comon.CloudletDetails;
+import org.cloudbus.cloudsim.projectone.comon.CloudletDetails;
 
 import java.util.*;
 
+/**
+ * ASSUMPTION :: Allowed to create any number of VMs per instance as much as wanted without interruption (within the datacenter boundaries)
+ */
 public class DynamicVMProvisioningStrategy {
-    // Consider 1000 MIPS per vCpu
-    private static final double MIPS_PER_VCPU = 1000.0;
+    // Consider 10000 MIPS per vCpu
+    private static final double MIPS_PER_VCPU = 10000.0;
 
     private static final Map<String, InstanceType> INSTANCE_TYPES = new LinkedHashMap<>();
     private static final Map<Integer, Map<Integer, Double>> vmStartTimes = new HashMap<>();  // <VMID, <CORE , START>
@@ -18,7 +22,9 @@ public class DynamicVMProvisioningStrategy {
     private static final Map<Integer, Map<Integer, CloudletDetails>> vmToCloudlets = new HashMap<>();
     private static final Map<String, Map<Integer, Vm>> runningVms = new HashMap<>();
 
-    // initializing few of many commercially available VMs
+    /**
+     * initializing few of many commercially available VMs
+     */
     static {
         // General Purpose Instances (t family)
         INSTANCE_TYPES.put("t3.micro", new InstanceType(2, 1024, 100000, 0.0132, false)); // 2 vCPUs, 1 GiB RAM, $0.0132/hour
@@ -54,7 +60,11 @@ public class DynamicVMProvisioningStrategy {
         return numberOfEachInstance;
     }
 
-    // Finding best instance
+    /**
+     * Finding best instance considering storage , mips and memory
+     * @param cloudlet
+     * @return
+     */
     private static InstanceType findBestInstance(CloudletDetails cloudlet) {
         InstanceType bestInstance = new InstanceType(0, 0, 0, 0.0, false);
         double minCostHourly = Double.MAX_VALUE;
@@ -75,7 +85,12 @@ public class DynamicVMProvisioningStrategy {
         return bestInstance;
     }
 
-    // provisioning
+    /**
+     * dynamic provisioning algorithm to execute cloudlets before deadline
+     * @param cloudlets
+     * @param userId
+     * @return
+     */
     public static List<Vm> provisionVms(List<CloudletDetails> cloudlets, int userId) {
         List<Vm> vmList = new ArrayList<>();
         Collections.sort(cloudlets, Comparator.comparingDouble(CloudletDetails::getCloudletSubmissionTime));
@@ -226,7 +241,22 @@ public class DynamicVMProvisioningStrategy {
                 10000,
                 instance.storage,
                 "Xen",
-                new CloudletSchedulerTimeShared());
+                new CloudletSchedulerSpaceShared());
+    }
+
+    public static double getHourlyCostByVmId(int vmId) {
+        for (Map.Entry<String, Map<Integer, Vm>> instanceEntry : runningVms.entrySet()) {
+            String instanceType = instanceEntry.getKey();
+            Map<Integer, Vm> vmsOfThisType = instanceEntry.getValue();
+
+            if (vmsOfThisType.containsKey(vmId)) {
+                InstanceType instanceSpecs = INSTANCE_TYPES.get(instanceType);
+                if (instanceSpecs != null) {
+                    return instanceSpecs.getHourlyCost();
+                }
+            }
+        }
+        return -1;
     }
 
     private static class InstanceType {
@@ -242,6 +272,26 @@ public class DynamicVMProvisioningStrategy {
             this.storage = storage;
             this.hourlyCost = hourlyCost;
             this.suitableVm = suitableVm;
+        }
+
+        public int getvCpus() {
+            return vCpus;
+        }
+
+        public int getRam() {
+            return ram;
+        }
+
+        public int getStorage() {
+            return storage;
+        }
+
+        public double getHourlyCost() {
+            return hourlyCost;
+        }
+
+        public boolean isSuitableVm() {
+            return suitableVm;
         }
 
         public void setSuitableVm(boolean suitableVm) {

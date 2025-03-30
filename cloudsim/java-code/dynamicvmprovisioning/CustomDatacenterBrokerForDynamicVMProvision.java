@@ -1,4 +1,4 @@
-package org.cloudbus.cloudsim.project.dynamicvmprovisioning;
+package org.cloudbus.cloudsim.projectone.dynamicvmprovisioning;
 
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudActionTags;
@@ -6,7 +6,7 @@ import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.GuestEntity;
 import org.cloudbus.cloudsim.core.SimEvent;
 import org.cloudbus.cloudsim.lists.VmList;
-import org.cloudbus.cloudsim.project.comon.CloudletDetails;
+import org.cloudbus.cloudsim.projectone.comon.CloudletDetails;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -19,9 +19,6 @@ public class CustomDatacenterBrokerForDynamicVMProvision extends DatacenterBroke
     private static int totalCloudletRead = 0;
     private final String cloudletFilePath;
     private List<CloudletDetails> cloudletDetailsList;
-    /**
-     * Next guest to which send the cloudlet
-     */
     private int guestIndex = 0;
     private final Map<Integer, Queue<CloudletDetails>> vmTaskQueues = new HashMap<>(); // VM ID -> Task Queue
     private final Map<Integer, Integer> vmCoreUsage = new HashMap<>(); // VM ID -> Core Usage
@@ -86,6 +83,9 @@ public class CustomDatacenterBrokerForDynamicVMProvision extends DatacenterBroke
         cloudletDetailsList = cloudletList;
     }
 
+    /**
+     * capture the created VM list from provisioning strategy
+     */
     @Override
     public void startEntity() {
         super.startEntity();
@@ -94,7 +94,10 @@ public class CustomDatacenterBrokerForDynamicVMProvision extends DatacenterBroke
     }
 
 
-    // ==============================================
+    /**
+     * override the existing submitCloudlets method to send the cloudlets to the mapped VM with a delay
+     * the delay represents the submission time of the cloudlet
+     */
     @Override
     protected void submitCloudlets() {
         List<CloudletDetails> successfullySubmitted = new ArrayList<>();
@@ -155,6 +158,10 @@ public class CustomDatacenterBrokerForDynamicVMProvision extends DatacenterBroke
         getCloudletList().removeAll(successfullySubmitted);
     }
 
+    /**
+     * overide existing method to capture the cloudlet return and remove them from vmCore usage map and re assign the available cloudlets to the vm
+     * @param ev a SimEvent object
+     */
     @Override
     protected void processCloudletReturn(SimEvent ev) {
         CloudletDetails cloudlet = (CloudletDetails) ev.getData();

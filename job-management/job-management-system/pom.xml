@@ -12,6 +12,182 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <docker.image.prefix>jobmanagement</docker.image.prefix>
+        <dockerfile.maven.plugin.version>1.4.14</dockerfile.maven.plugin.version>
+        <jib.maven.plugin.version>3.4.0</jib.maven.plugin.version>
     </properties>
+
+    <build>
+        <plugins>
+            <!-- Java Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+
+<!--            &lt;!&ndash; Create executable JAR &ndash;&gt;-->
+<!--            <plugin>-->
+<!--                <groupId>org.apache.maven.plugins</groupId>-->
+<!--                <artifactId>maven-jar-plugin</artifactId>-->
+<!--                <version>3.3.0</version>-->
+<!--                <configuration>-->
+<!--                    <archive>-->
+<!--                        <manifest>-->
+<!--                            <addClasspath>true</addClasspath>-->
+<!--                            <mainClass>com.jobmanagement.master.MasterCLI</mainClass>-->
+<!--                        </manifest>-->
+<!--                    </archive>-->
+<!--                </configuration>-->
+<!--            </plugin>-->
+
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>build-a</id>
+                        <configuration>
+                            <archive>
+                                <manifest>
+                                    <mainClass>com.jobmanagement.master.MasterServer</mainClass>
+                                </manifest>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <!-- <appendAssemblyId>false</appendAssemblyId> -->
+                            <finalName>master-server</finalName>
+                        </configuration>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>build-b</id>
+                        <configuration>
+                            <archive>
+                                <manifest>
+                                    <mainClass>com.jobmanagement.master.MasterCLI</mainClass>
+                                </manifest>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <!-- <appendAssemblyId>false</appendAssemblyId> -->
+                            <finalName>master-cli</finalName>
+                        </configuration>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>build-c</id>
+                        <configuration>
+                            <archive>
+                                <manifest>
+                                    <mainClass>com.jobmanagement.worker.WorkerServer</mainClass>
+                                </manifest>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <!-- <appendAssemblyId>false</appendAssemblyId> -->
+                            <finalName>worker-server</finalName>
+                        </configuration>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+
+
+<!--            &lt;!&ndash; Option 2: JIB Maven Plugin (no Docker needed) &ndash;&gt;-->
+<!--            <plugin>-->
+<!--                <groupId>com.google.cloud.tools</groupId>-->
+<!--                <artifactId>jib-maven-plugin</artifactId>-->
+<!--                <version>${jib.maven.plugin.version}</version>-->
+<!--                <configuration>-->
+<!--                    <from>-->
+<!--                        <image>amazoncorretto:21</image>-->
+<!--                    </from>-->
+<!--                    <to>-->
+<!--                        <image>${docker.image.prefix}/${project.artifactId}</image>-->
+<!--                        <tags>-->
+<!--                            <tag>${project.version}</tag>-->
+<!--                            <tag>latest</tag>-->
+<!--                        </tags>-->
+<!--                    </to>-->
+<!--                    <container>-->
+<!--                        <mainClass>com.jobmanagement.master.MasterServer</mainClass>-->
+<!--                        <ports>-->
+<!--                            <port>8080</port>-->
+<!--                        </ports>-->
+<!--                    </container>-->
+<!--                </configuration>-->
+<!--            </plugin>-->
+
+
+<!--                <plugin>-->
+<!--                    <artifactId>maven-assembly-plugin</artifactId>-->
+<!--                    <executions>-->
+<!--                        <execution>-->
+<!--                            <id>build-a</id>-->
+<!--                            <configuration>-->
+<!--                                <archive>-->
+<!--                                    <manifest>-->
+<!--                                        <mainClass>foobar.Aclass</mainClass>-->
+<!--                                    </manifest>-->
+<!--                                </archive>-->
+<!--                                <descriptorRefs>-->
+<!--                                    <descriptorRef>jar-with-dependencies</descriptorRef>-->
+<!--                                </descriptorRefs>-->
+<!--                                <finalName>foobar_a.jar</finalName>-->
+<!--                            </configuration>-->
+<!--                        </execution>-->
+<!--                        <execution>-->
+<!--                            <id>build-b</id>-->
+<!--                            <configuration>-->
+<!--                                <archive>-->
+<!--                                    <manifest>-->
+<!--                                        <mainClass>foobar.Bclass</mainClass>-->
+<!--                                    </manifest>-->
+<!--                                </archive>-->
+<!--                                <descriptorRefs>-->
+<!--                                    <descriptorRef>jar-with-dependencies</descriptorRef>-->
+<!--                                </descriptorRefs>-->
+<!--                                <finalName>foobar_b.jar</finalName>-->
+<!--                            </configuration>-->
+<!--                        </execution>-->
+<!--                    </executions>-->
+<!--                </plugin>-->
+
+
+
+
+        </plugins>
+    </build>
+
+    <profiles>
+
+        <profile>
+            <id>jib</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.google.cloud.tools</groupId>
+                        <artifactId>jib-maven-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

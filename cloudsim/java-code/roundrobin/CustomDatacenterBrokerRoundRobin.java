@@ -1,12 +1,11 @@
-package org.cloudbus.cloudsim.project.roundrobin;
+package org.cloudbus.cloudsim.projectone.roundrobin;
 
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudActionTags;
 import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.GuestEntity;
 import org.cloudbus.cloudsim.lists.VmList;
-import org.cloudbus.cloudsim.project.comon.CloudletDetails;
-import org.cloudbus.cloudsim.project.dynamicvmprovisioning.DynamicVMProvisioningStrategy;
+import org.cloudbus.cloudsim.projectone.comon.CloudletDetails;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -20,15 +19,12 @@ public class CustomDatacenterBrokerRoundRobin extends DatacenterBroker {
     private static int totalCloudletRead = 0;
     private final String cloudletFilePath;
     private List<CloudletDetails> cloudletDetailsList;
-    /**
-     * Next guest to which send the cloudlet
-     */
     private int guestIndex = 0;
     private final Map<Integer, Queue<CloudletDetails>> vmTaskQueues = new HashMap<>(); // VM ID -> Task Queue
     private final Map<Integer, Integer> vmCoreUsage = new HashMap<>(); // VM ID -> Core Usage
 
     /**
-     * Created a new CustomDatacenterBroker object.
+     * Created a new CustomDatacenterBroker object for round robin algorithm.
      *
      * @param name name to be associated with this entity (as required by {@link org.cloudbus.cloudsim.core.SimEntity} class)
      * @throws Exception the exception
@@ -89,6 +85,9 @@ public class CustomDatacenterBrokerRoundRobin extends DatacenterBroker {
         return cloudletDetailsList;
     }
 
+    /**
+     * override the startEntity to get the created fixed VM list
+     */
     @Override
     public void startEntity() {
         super.startEntity();
@@ -97,9 +96,10 @@ public class CustomDatacenterBrokerRoundRobin extends DatacenterBroker {
     }
 
 
-    // ==============================================
-    // Implement round robin algorithm to assign VMs to cloudlet
-    // Ensure Cloudlets Are Assigned in a Cyclic Manner
+    /**
+     * Implement round robin algorithm to assign VMs to cloudlet
+     * Ensure Cloudlets Are Assigned in a Cyclic Manner
+     */
     @Override
     protected void submitCloudlets() {
         List<CloudletDetails> successfullySubmitted = new ArrayList<>();

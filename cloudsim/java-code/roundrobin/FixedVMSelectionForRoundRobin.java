@@ -1,8 +1,9 @@
-package org.cloudbus.cloudsim.project.roundrobin;
+package org.cloudbus.cloudsim.projectone.roundrobin;
 
 import org.cloudbus.cloudsim.CloudletSchedulerSpaceShared;
 import org.cloudbus.cloudsim.Vm;
-import org.cloudbus.cloudsim.project.comon.CloudletDetails;
+import org.cloudbus.cloudsim.projectone.comon.CloudletDetails;
+import org.cloudbus.cloudsim.projectone.dynamicvmprovisioning.DynamicVMProvisioningStrategy;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -12,15 +13,17 @@ import java.util.stream.Collectors;
  *               Create next VMs on next suitable instance, if the above bound is exceeded !!
  */
 public class FixedVMSelectionForRoundRobin {
-    // Consider 1000 MIPS per vCpu
-    private static final double MIPS_PER_VCPU = 1000.0;
+    // Consider 10000 MIPS per vCpu
+    private static final double MIPS_PER_VCPU = 10000.0;
 
     private static final Map<String, InstanceType> INSTANCE_TYPES = new LinkedHashMap<>();
     private static final Map<String, Integer> numberOfEachInstance = new HashMap<>();
     private static final Map<String, Map<Integer, Vm>> runningVms = new HashMap<>();
     private static final List<Integer> createdVMIDs = new ArrayList<>();
 
-    // initializing few of many commercially available VMs
+    /**
+     * initializing few of many commercially available VMs
+     */
     static {
         // General Purpose Instances (t family)
         INSTANCE_TYPES.put("t3.micro", new InstanceType(2, 1024, 100000, 0.0132, false)); // 2 vCPUs, 1 GiB RAM, $0.0132/hour
@@ -63,28 +66,23 @@ public class FixedVMSelectionForRoundRobin {
                 return instanceEntry.getKey();
             }
         }
-        return null; // Or throw an exception if the VM ID is not found
-    }
-
-    public static double getHourlyPriceByVmId(int vmId) {
-        String instanceName = getInstanceNameByVmId(vmId);
-        if (instanceName != null) {
-            return getHourlyPrice(instanceName); // Use the existing getHourlyPrice method
-        } else {
-            return -1.0; // Or throw an exception if the VM ID is not found
-        }
+        return null;
     }
 
     public static double getHourlyPrice(String instanceKey) {
         if (INSTANCE_TYPES.containsKey(instanceKey)) {
             return INSTANCE_TYPES.get(instanceKey).hourlyCost;
         } else {
-            // Handle the case where the key is not found (e.g., throw an exception or return a default value)
-            return -1.0; // Or throw an IllegalArgumentException
+            return -1.0;
         }
     }
 
-    // Finding best instance
+    /**
+     * Finding best instance considering storage , mips and memory
+     * @param cloudletDetails
+     * @param userId
+     * @return
+     */
     public static List<Vm> findBestInstance(List<CloudletDetails> cloudletDetails, int userId) {
         List<Vm> vmList = new ArrayList<>();
 
@@ -116,7 +114,7 @@ public class FixedVMSelectionForRoundRobin {
                     int currentCount = numberOfEachInstance.get(instanceName);
                     System.out.println("Current count for " + instanceName + ": " + currentCount); // Debugging
 
-                    if (currentCount < 100) { // Changed to < from <=
+                    if (currentCount < 80) { // Changed to < from <=
                         bestInstance = INSTANCE_TYPES.get(instanceName);
                         Vm vm = createVm(userId, instanceName, bestInstance);
                         vmList.add(vm);
@@ -159,6 +157,21 @@ public class FixedVMSelectionForRoundRobin {
                 new CloudletSchedulerSpaceShared());
     }
 
+    public static double getHourlyCostByVmId(int vmId) {
+        for (Map.Entry<String, Map<Integer, Vm>> instanceEntry : runningVms.entrySet()) {
+            String instanceType = instanceEntry.getKey();
+            Map<Integer, Vm> vmsOfThisType = instanceEntry.getValue();
+
+            if (vmsOfThisType.containsKey(vmId)) {
+                InstanceType instanceSpecs = INSTANCE_TYPES.get(instanceType);
+                if (instanceSpecs != null) {
+                    return instanceSpecs.getHourlyCost();
+                }
+            }
+        }
+        return -1;
+    }
+
     private static class InstanceType {
         int vCpus;
         int ram;
@@ -172,6 +185,26 @@ public class FixedVMSelectionForRoundRobin {
             this.storage = storage;
             this.hourlyCost = hourlyCost;
             this.suitableVm = suitableVm;
+        }
+
+        public int getvCpus() {
+            return vCpus;
+        }
+
+        public int getRam() {
+            return ram;
+        }
+
+        public int getStorage() {
+            return storage;
+        }
+
+        public double getHourlyCost() {
+            return hourlyCost;
+        }
+
+        public boolean isSuitableVm() {
+            return suitableVm;
         }
 
         public void setSuitableVm(boolean suitableVm) {

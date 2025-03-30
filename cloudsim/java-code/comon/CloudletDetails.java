@@ -1,4 +1,4 @@
-package org.cloudbus.cloudsim.project.comon;
+package org.cloudbus.cloudsim.projectone.comon;
 
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.UtilizationModel;

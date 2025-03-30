@@ -1,8 +1,8 @@
-package org.cloudbus.cloudsim.project.dynamicvmprovisioning;
+package org.cloudbus.cloudsim.projectone.dynamicvmprovisioning;
 
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudSim;
-import org.cloudbus.cloudsim.project.comon.CloudletDetails;
+import org.cloudbus.cloudsim.projectone.comon.CloudletDetails;
 import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
@@ -22,7 +22,7 @@ public class DynamicVMProvisionApplication {
      * If there are multiple brokers, we should avoid using static as it can be override the variables, since it will be used across multiple entities
      */
     public static CustomDatacenterBrokerForDynamicVMProvision broker;
-    private static final String filePath = "F:/Avishka-Sandeepa-PHD/Project/cloudsim/modules/cloudsim-examples/src/main/java/org/cloudbus/cloudsim/project/dataset/cloudlet.txt";
+    private static final String filePath = "F:\\Avishka-Sandeepa-PHD\\Project\\cloudsim\\modules\\cloudsim-examples\\src\\main\\java\\org\\cloudbus\\cloudsim\\projectone\\dataset\\cloudlets_updated.txt";
 
     /** The vmlist. */
     private static List<Vm> vmlist;
@@ -39,7 +39,7 @@ public class DynamicVMProvisionApplication {
             CloudSim.init(num_user, calendar, trace_flag);
 
             // ----------- Second Step: Creating a datacenter with 500 hosts (each has  cores)
-            Datacenter datacenter = createDatacenter("Datacenter_0", 500, 8);
+            CustomDatacenter datacenter = createDatacenter("Datacenter_0", 500, 8);
 
             // ----------- Third Step: Creating a single broker, since these cloudlets are handle by single user/organization
             broker = new CustomDatacenterBrokerForDynamicVMProvision("Broker",
@@ -59,7 +59,7 @@ public class DynamicVMProvisionApplication {
             //----------- Stop the simulation
             CloudSim.stopSimulation();
 
-            printCloudletList(newList);
+            printCloudletList(newList, datacenter.getVmStartTimes(), datacenter.getVmFinishTimes());
 
             Log.println("CloudSim questionOne is finished!");
 
@@ -76,7 +76,7 @@ public class DynamicVMProvisionApplication {
      * @param numberOfCores for the datacenter
      * @return Datacenter
      */
-    public static Datacenter createDatacenter(String name, int numberOfHosts, int numberOfCores) {
+    public static CustomDatacenter createDatacenter(String name, int numberOfHosts, int numberOfCores) {
         // Steps for HOST machine creation under given instructions
 
         // Initialize the list of host machines
@@ -126,9 +126,9 @@ public class DynamicVMProvisionApplication {
                 costPerStorage, costPerBw);
 
         // 6. Finally, we need to create a PowerDatacenter object.
-        Datacenter datacenter = null;
+        CustomDatacenter datacenter = null;
         try {
-            datacenter = new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList), storageList, 0);
+            datacenter = new CustomDatacenter(name, characteristics, new VmAllocationPolicySimple(hostList), storageList, 0);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -142,7 +142,7 @@ public class DynamicVMProvisionApplication {
      * Prints the Cloudlet objects
      * @param list  list of Cloudlets
      */
-    private static void printCloudletList(List<CloudletDetails> list) {
+    private static void printCloudletList(List<CloudletDetails> list, Map<Integer, Double> vmStartTime, Map<Integer, Double> vmEndTime) {
         CloudletDetails cloudlet;
         Map<String, Double> runningVmNames = new HashMap<>();
         Map<Integer, Double> vmExecutionTimes = new HashMap<>();
@@ -158,7 +158,6 @@ public class DynamicVMProvisionApplication {
                 "Data center ID" + indent + "VM ID" + indent + indent +
                 "SubmissionTime" + indent + indent + "Time" + indent + indent +
                 "Start Time" + indent + "Finish Time" + indent + indent +
-//                "Deadline" + indent +
                 "VM Instance" + indent + indent + "Price Per Hour($)" + indent + indent + "Price for consumption ($)");
 
         DecimalFormat dft = new DecimalFormat("###.##");
@@ -171,9 +170,6 @@ public class DynamicVMProvisionApplication {
             Log.print(indent + cloudlet.getCloudletId() + indent + indent);
             totalCost += cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0);
 
-//            if (!runningVmNames.containsKey(cloudlet.getBestInstance())) {
-//                runningVmNames.put(cloudlet.getBestInstance(), 0.0);
-//            }
 
             int vmId = cloudlet.getGuestId();
             double executionTime = cloudlet.getExecFinishTime() - cloudlet.getExecStartTime();
@@ -183,7 +179,6 @@ public class DynamicVMProvisionApplication {
             runningVmNames.merge(foundInstanceName, executionTime, Double::sum);
             totalCostPerVm.merge(foundInstanceName, cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0), Double::sum);
 
-//            if (cloudlet.getDeadline() < cloudlet.getExecFinishTime()) System.err.println("ERRRRRRRR");
             if (cloudlet.getStatus() == CloudletDetails.CloudletStatus.SUCCESS && Objects.nonNull(cloudlet.getBestInstance())) {
                 Log.print("SUCCESS");
                 totalCompleted++;
@@ -194,10 +189,10 @@ public class DynamicVMProvisionApplication {
                         indent + indent + indent + indent + dft.format(cloudlet.getActualCPUTime()) +
                         indent + indent + indent + dft.format(cloudlet.getExecStartTime()) +
                         indent + indent + indent + dft.format(cloudlet.getExecFinishTime()) +
-//                        indent + indent + indent + cloudlet.getDeadline() +
                         indent + indent + indent + cloudlet.getBestInstance() +
                         indent + indent + indent + cloudlet.getHourlyPrice() +
-                        indent + indent + indent + indent + indent + dft1.format(cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0)));
+                        indent + indent + indent + indent + indent + dft1.format(cloudlet.getActualCPUTime() * (cloudlet.getHourlyPrice()/3600.0))+
+                        indent + indent + indent + indent + indent + (cloudlet.getExecFinishTime() > cloudlet.getDeadline() ? "WASTED" : "GOOD"));
             }
         }
 
@@ -216,15 +211,7 @@ public class DynamicVMProvisionApplication {
         }
 
         Map<Integer, Double> sortedvmExecutionTimes = new TreeMap<>(vmExecutionTimes);
-//        Log.println();
-//        Log.println();
-//        Log.println("======== VM Times ========");
-//        Log.println("VM ID" + indent + indent + "ExecutionTime" + indent + indent + "Cost per Instance");
-//        for (Map.Entry<Integer, Double> entry : sortedvmExecutionTimes.entrySet()) {
-//            Log.println(entry.getKey() +
-//                    indent + indent + entry.getValue() +
-//                    indent + indent + indent + indent + indent + dft1.format(vmCostTimes.get(entry.getKey())));
-//        }
+
 
         // ==================== testing only ====================================
         Log.println();
@@ -257,6 +244,30 @@ public class DynamicVMProvisionApplication {
             Log.println();
         }
 
+        Log.println();
+        Log.println();
+        Log.println("++++++++++++++++++++++++++ IMPORTANT ++++++++++++++++++++++++");
+        Log.println();
+        Log.println("VMID" + indent + "Start Time" + indent + "End Time" + indent + "Price");
+        Double time = 0.0;
+        Double cost = 0.0;
+        List<Double> execTime = new ArrayList<>();
+        List<Double> price =  new ArrayList<>();
+        for (Map.Entry<Integer, Double> vmEntry : vmStartTime.entrySet()) {
+            Integer vmId = vmEntry.getKey();
+            Double startTime = vmEntry.getValue();
+            Double finishTime = (vmEndTime.containsKey(vmId) ? vmEndTime.get(vmId) : -1);
+
+            cost += (finishTime-startTime)*DynamicVMProvisioningStrategy.getHourlyCostByVmId(vmId);
+            time += finishTime-startTime;
+            execTime.add(finishTime-startTime);
+            price.add((finishTime-startTime)*DynamicVMProvisioningStrategy.getHourlyCostByVmId(vmId));
+            Log.println(vmId + indent + startTime + indent + finishTime + indent + ((finishTime-startTime)*DynamicVMProvisioningStrategy.getHourlyCostByVmId(vmId)));
+        }
+        Log.println();
+        Log.println("Total exec time = " + time/3600 + "hours");
+
+        Log.println("Total Price = " + cost/1000 + " K $");
 
     }
 

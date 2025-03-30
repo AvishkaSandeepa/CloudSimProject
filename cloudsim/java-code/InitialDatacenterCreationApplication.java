@@ -1,4 +1,4 @@
-package org.cloudbus.cloudsim.project;
+package org.cloudbus.cloudsim.projectone;
 
 import org.cloudbus.cloudsim.*;
 import org.cloudbus.cloudsim.core.CloudSim;

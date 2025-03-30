@@ -1,0 +1,61 @@
+services:
+  master:
+    image: job-management-master
+    container_name: master
+    ports:
+      - "8080:8080"
+    networks:
+      - job-network
+
+  worker1:
+    image: job-management-worker
+    container_name: worker1
+    environment:
+      MASTER_HOST: master
+      WORKER_HOST: worker1
+    command: ["java", "-jar", "app.jar", "8081", "master@123", "1000"]
+    ports:
+      - "8081:8081"
+    networks:
+      - job-network
+
+  worker2:
+    image: job-management-worker
+    container_name: worker2
+    environment:
+      MASTER_HOST: master
+      WORKER_HOST: worker2
+    command: ["java", "-jar", "app.jar", "8082", "master@123", "2000"]
+    ports:
+      - "8082:8082"
+    networks:
+      - job-network
+
+  worker3:
+    image: job-management-worker
+    container_name: worker3
+    environment:
+      MASTER_HOST: master
+      WORKER_HOST: worker3
+    command: ["java", "-jar", "app.jar", "8084", "master@123", "3000"]
+    ports:
+      - "8084:8084"
+    networks:
+      - job-network
+
+  cli:
+    image: job-management-cli
+    container_name: cli
+    environment:
+      MASTER_HOST: master
+    stdin_open: true
+    tty: true
+    command: [ "java", "-jar", "app.jar" ]
+    ports:
+      - "8085:8085"
+    networks:
+      - job-network
+
+networks:
+  job-network:
+    driver: bridge
